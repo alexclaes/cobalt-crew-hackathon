@@ -1,0 +1,46 @@
+{
+  "users": [
+    {
+      "id": "user1",
+      "name": "Sophie",
+      "address": "Alexanderplatz 7, 10178 Berlin, Germany",
+      "lat": 52.5219,
+      "lon": 13.4132
+    },
+    {
+      "id": "user2",
+      "name": "Lukas",
+      "address": "Marienplatz 1, 80331 Munich, Germany",
+      "lat": 48.1374,
+      "lon": 11.5755
+    },
+    {
+      "id": "user3",
+      "name": "Emma",
+      "address": "Reeperbahn 154, 20359 Hamburg, Germany",
+      "lat": 53.5496,
+      "lon": 9.9616
+    },
+    {
+      "id": "user4",
+      "name": "Felix",
+      "address": "Königsallee 60, 40212 Düsseldorf, Germany",
+      "lat": 51.2254,
+      "lon": 6.7763
+    },
+    {
+      "id": "user5",
+      "name": "Mia",
+      "address": "Hauptstraße 142, 69117 Heidelberg, Germany",
+      "lat": 49.4093,
+      "lon": 8.6937
+    },
+    {
+      "id": "user6",
+      "name": "Jonas",
+      "address": "Römerberg 27, 60311 Frankfurt am Main, Germany",
+      "lat": 50.1106,
+      "lon": 8.6821
+    }
+  ]
+}
