@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import AddressInput, { AddressSuggestion } from '@/components/AddressInput';
-import { calculateMidpoint, Coordinate } from '@/lib/midpoint';
+import { calculateMidpoint, getDefaultRadiusKm, Coordinate } from '@/lib/midpoint';
 import type { MapPoint } from '@/components/MapDisplay';
 
 // Dynamically import MapDisplay with SSR disabled to prevent "window is not defined" error
@@ -25,6 +25,7 @@ export default function Home() {
   >([]);
   const [userCount, setUserCount] = useState(2); // Start with 2 users
   const [showMap, setShowMap] = useState(false);
+  const [radiusKm, setRadiusKm] = useState(50); // default; updated from trip scale when map is shown
 
   // Create a stable key for addresses to use in useMemo
   const addressesKey = useMemo(() => {
@@ -53,6 +54,17 @@ export default function Home() {
       label: addr.userLabel,
     }));
   }, [addressesKey]);
+
+  // Set default radius from trip scale (Germany: small 1 km, mid 15 km, large 50 km) when midpoint/addresses change
+  const coordinatesForRadius = useMemo(
+    () => addresses.map((a) => ({ lat: a.address.lat, lon: a.address.lon })),
+    [addressesKey]
+  );
+  useEffect(() => {
+    if (midpoint && coordinatesForRadius.length >= 2) {
+      setRadiusKm(getDefaultRadiusKm(midpoint, coordinatesForRadius));
+    }
+  }, [midpoint?.lat, midpoint?.lon, coordinatesForRadius.length, addressesKey]);
 
   const handleAddressSelect = (userLabel: string, address: AddressSuggestion) => {
     setAddresses((prev) => {
@@ -166,6 +178,28 @@ export default function Home() {
                   </div>
                 )}
               </div>
+
+              {/* Search radius slider – underneath places input, Germany-scale defaults (1 / 15 / 50 km) */}
+              {showMap && midpoint && (
+                <div className="mt-6 pt-4 border-t border-gray-200">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Search radius: {radiusKm} km
+                  </label>
+                  <input
+                    type="range"
+                    min={1}
+                    max={100}
+                    step={1}
+                    value={radiusKm}
+                    onChange={(e) => setRadiusKm(Number(e.target.value))}
+                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                  />
+                  <div className="flex justify-between text-xs text-gray-500 mt-1">
+                    <span>1 km</span>
+                    <span>100 km</span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -175,7 +209,7 @@ export default function Home() {
               Map View
             </h2>
             {showMap && addresses.length > 0 ? (
-              <MapDisplay startpoints={mapPoints} midpoint={midpoint} />
+              <MapDisplay startpoints={mapPoints} midpoint={midpoint} radiusKm={radiusKm} />
             ) : (
               <div className="h-[500px] flex items-center justify-center border border-gray-300 rounded-lg bg-gray-50">
                 <div className="text-center text-gray-500">

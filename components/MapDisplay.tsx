@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useMemo, memo } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-leaflet';
 import L from 'leaflet';
 
 export interface MapPoint {
@@ -13,6 +13,8 @@ export interface MapPoint {
 interface MapDisplayProps {
   startpoints: MapPoint[];
   midpoint: { lat: number; lon: number } | null;
+  /** Search radius in km around the midpoint (for places search). Default 50. */
+  radiusKm?: number;
 }
 
 // Fix for default marker icons in React-Leaflet - moved inside component to avoid SSR issues
@@ -63,7 +65,9 @@ function FitBounds({ points }: { points: Array<{ lat: number; lon: number }> }) 
   return null;
 }
 
-function MapDisplay({ startpoints, midpoint }: MapDisplayProps) {
+const DEFAULT_RADIUS_KM = 50;
+
+function MapDisplay({ startpoints, midpoint, radiusKm = DEFAULT_RADIUS_KM }: MapDisplayProps) {
   const renderId = useRef(Math.random().toString(36).substring(7));
   const [isMounted, setIsMounted] = useState(false);
   const mapRef = useRef<L.Map | null>(null);
@@ -146,6 +150,20 @@ function MapDisplay({ startpoints, midpoint }: MapDisplayProps) {
           </Marker>
         ))}
 
+        {/* Search radius circle around midpoint (50 km default, adjustable later) */}
+        {midpoint && (
+          <Circle
+            center={[midpoint.lat, midpoint.lon]}
+            radius={radiusKm * 1000}
+            pathOptions={{
+              color: '#2563eb',
+              fillColor: '#3b82f6',
+              fillOpacity: 0.15,
+              weight: 2,
+            }}
+          />
+        )}
+
         {/* Midpoint marker */}
         {midpoint && (
           <Marker
@@ -156,6 +174,9 @@ function MapDisplay({ startpoints, midpoint }: MapDisplayProps) {
               <div className="font-bold text-blue-600">Midpoint</div>
               <div className="text-sm text-gray-600">
                 Geographic center of all start points
+              </div>
+              <div className="text-sm text-gray-500 mt-1">
+                Search radius: {radiusKm} km
               </div>
             </Popup>
           </Marker>
@@ -194,6 +215,10 @@ export default memo(MapDisplay, (prevProps, nextProps) => {
   if (Math.abs(prevProps.midpoint.lat - nextProps.midpoint.lat) > 0.000001 || 
       Math.abs(prevProps.midpoint.lon - nextProps.midpoint.lon) > 0.000001) {
     return false; // Midpoint coordinates changed
+  }
+
+  if ((prevProps.radiusKm ?? DEFAULT_RADIUS_KM) !== (nextProps.radiusKm ?? DEFAULT_RADIUS_KM)) {
+    return false; // Radius changed
   }
   
   return true; // All props are equal, skip re-render
