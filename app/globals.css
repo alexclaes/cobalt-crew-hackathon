@@ -1,3 +1,9 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Place markers (restaurant/bar/hotel): no default Leaflet icon background */
+.leaflet-div-icon.place-marker {
+  background: transparent !important;
+  border: none !important;
+}

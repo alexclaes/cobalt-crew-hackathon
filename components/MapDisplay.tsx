@@ -10,11 +10,61 @@ export interface MapPoint {
   label: string;
 }
 
+export type PlaceType = 'restaurant' | 'bar' | 'hotel';
+
+/** Place from Overpass (OSM); API response + type for coloring. */
+export interface Restaurant {
+  id: string;
+  name: string;
+  lat: number;
+  lon: number;
+  type: PlaceType;
+  cuisine?: string;
+  priceRange?: string;
+  openingHours?: string;
+}
+
 interface MapDisplayProps {
   startpoints: MapPoint[];
   midpoint: { lat: number; lon: number } | null;
   /** Search radius in km around the midpoint (for places search). Default 50. */
   radiusKm?: number;
+  /** Places within radius (from Overpass API), each with type for marker color. */
+  restaurants?: Restaurant[];
+}
+
+const PLACE_TYPE_LABELS: Record<PlaceType, string> = {
+  restaurant: 'Restaurant',
+  bar: 'Bar',
+  hotel: 'Hotel',
+};
+
+const PLACE_COLORS: Record<PlaceType, { bg: string; border: string }> = {
+  restaurant: { bg: '#ea580c', border: '#c2410c' },
+  bar: { bg: '#7c3aed', border: '#5b21b6' },
+  hotel: { bg: '#059669', border: '#047857' },
+};
+
+const placeIcons: Partial<Record<PlaceType, L.DivIcon>> = {};
+
+function getPlaceIcon(type: PlaceType): L.DivIcon {
+  if (!placeIcons[type] && typeof window !== 'undefined') {
+    const { bg, border } = PLACE_COLORS[type];
+    placeIcons[type] = L.divIcon({
+      className: `place-marker place-marker-${type}`,
+      html: `<div style="
+        width: 24px; height: 24px;
+        background: ${bg};
+        border: 2px solid ${border};
+        border-radius: 50%;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+      "></div>`,
+      iconSize: [24, 24],
+      iconAnchor: [12, 12],
+      popupAnchor: [0, -12],
+    });
+  }
+  return placeIcons[type]!;
 }
 
 // Fix for default marker icons in React-Leaflet - moved inside component to avoid SSR issues
@@ -51,23 +101,55 @@ function getMidpointIcon(): L.Icon {
   return midpointIcon!;
 }
 
-// Component to fit map bounds
+// Component to fit map bounds to points
 function FitBounds({ points }: { points: Array<{ lat: number; lon: number }> }) {
   const map = useMap();
-
   useEffect(() => {
     if (points.length > 0) {
       const bounds = L.latLngBounds(points.map((p) => [p.lat, p.lon]));
       map.fitBounds(bounds, { padding: [50, 50] });
     }
   }, [map, points]);
+  return null;
+}
 
+// Zoom map to radius view: fit bounds to the circle around midpoint (and optional restaurant points)
+function FitBoundsToRadius({
+  midpoint,
+  radiusKm,
+  restaurantPoints,
+}: {
+  midpoint: { lat: number; lon: number };
+  radiusKm: number;
+  restaurantPoints?: Array<{ lat: number; lon: number }>;
+}) {
+  const map = useMap();
+  useEffect(() => {
+    const lat = midpoint.lat;
+    const lon = midpoint.lon;
+    // ~111 km per degree lat; lon degree = 111 * cos(lat rad)
+    const kmPerDegLat = 111;
+    const kmPerDegLon = 111 * Math.cos((lat * Math.PI) / 180);
+    const pad = 1.15; // slight padding so circle isn't at edge
+    const south = lat - (radiusKm / kmPerDegLat) * pad;
+    const north = lat + (radiusKm / kmPerDegLat) * pad;
+    const west = lon - (radiusKm / kmPerDegLon) * pad;
+    const east = lon + (radiusKm / kmPerDegLon) * pad;
+    const bounds = L.latLngBounds(
+      [south, west],
+      [north, east]
+    );
+    if (restaurantPoints && restaurantPoints.length > 0) {
+      restaurantPoints.forEach((p) => bounds.extend([p.lat, p.lon]));
+    }
+    map.fitBounds(bounds, { padding: [40, 40] });
+  }, [map, midpoint.lat, midpoint.lon, radiusKm, restaurantPoints?.length]);
   return null;
 }
 
 const DEFAULT_RADIUS_KM = 50;
 
-function MapDisplay({ startpoints, midpoint, radiusKm = DEFAULT_RADIUS_KM }: MapDisplayProps) {
+function MapDisplay({ startpoints, midpoint, radiusKm = DEFAULT_RADIUS_KM, restaurants = [] }: MapDisplayProps) {
   const renderId = useRef(Math.random().toString(36).substring(7));
   const [isMounted, setIsMounted] = useState(false);
   const mapRef = useRef<L.Map | null>(null);
@@ -98,6 +180,11 @@ function MapDisplay({ startpoints, midpoint, radiusKm = DEFAULT_RADIUS_KM }: Map
       ...(midpoint ? [midpoint] : []),
     ];
   }, [startpoints, midpoint]);
+
+  const restaurantPoints = useMemo(
+    () => restaurants.map((r) => ({ lat: r.lat, lon: r.lon })),
+    [restaurants]
+  );
 
   // Memoize center and zoom to prevent recalculations
   const center: [number, number] = useMemo(() => {
@@ -182,8 +269,40 @@ function MapDisplay({ startpoints, midpoint, radiusKm = DEFAULT_RADIUS_KM }: Map
           </Marker>
         )}
 
-        {/* Fit bounds to show all points */}
-        {allPoints.length > 0 && <FitBounds points={allPoints} />}
+        {/* Place markers (color by type): restaurants, bars, hotels */}
+        {restaurants.map((r) => (
+          <Marker
+            key={r.id}
+            position={[r.lat, r.lon]}
+            icon={getPlaceIcon(r.type)}
+          >
+            <Popup>
+              <div className="text-xs font-medium text-blue-600 uppercase tracking-wide">
+                {PLACE_TYPE_LABELS[r.type]}
+              </div>
+              <div className="font-medium text-gray-900">{r.name}</div>
+              {r.cuisine && (
+                <div className="text-sm text-gray-600">Cuisine / style: {r.cuisine}</div>
+              )}
+              {r.priceRange && (
+                <div className="text-sm text-gray-600">Price: {r.priceRange}</div>
+              )}
+              {r.openingHours && (
+                <div className="text-xs text-gray-500 mt-1">{r.openingHours}</div>
+              )}
+            </Popup>
+          </Marker>
+        ))}
+
+        {/* Zoom to radius view when midpoint + radius set; otherwise fit all points */}
+        {midpoint && (
+          <FitBoundsToRadius
+            midpoint={midpoint}
+            radiusKm={radiusKm}
+            restaurantPoints={restaurantPoints.length > 0 ? restaurantPoints : undefined}
+          />
+        )}
+        {!midpoint && allPoints.length > 0 && <FitBounds points={allPoints} />}
       </MapContainer>
     </div>
   );
@@ -220,6 +339,15 @@ export default memo(MapDisplay, (prevProps, nextProps) => {
   if ((prevProps.radiusKm ?? DEFAULT_RADIUS_KM) !== (nextProps.radiusKm ?? DEFAULT_RADIUS_KM)) {
     return false; // Radius changed
   }
-  
+
+  if (prevProps.restaurants?.length !== nextProps.restaurants?.length) {
+    return false;
+  }
+  const restPrev = prevProps.restaurants ?? [];
+  const restNext = nextProps.restaurants ?? [];
+  for (let i = 0; i < restPrev.length; i++) {
+    if (restPrev[i].id !== restNext[i].id || restPrev[i].type !== restNext[i].type) return false;
+  }
+
   return true; // All props are equal, skip re-render
 });

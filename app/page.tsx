@@ -3,8 +3,8 @@
 import { useState, useMemo, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import AddressInput, { AddressSuggestion } from '@/components/AddressInput';
-import { calculateMidpoint, getDefaultRadiusKm, Coordinate } from '@/lib/midpoint';
-import type { MapPoint } from '@/components/MapDisplay';
+import { calculateMidpoint, getDefaultRadiusKm, haversineDistanceKm, Coordinate } from '@/lib/midpoint';
+import type { MapPoint, Restaurant, PlaceType } from '@/components/MapDisplay';
 
 // Dynamically import MapDisplay with SSR disabled to prevent "window is not defined" error
 const MapDisplay = dynamic(() => import('@/components/MapDisplay'), {
@@ -26,6 +26,15 @@ export default function Home() {
   const [userCount, setUserCount] = useState(2); // Start with 2 users
   const [showMap, setShowMap] = useState(false);
   const [radiusKm, setRadiusKm] = useState(50); // default; updated from trip scale when map is shown
+  const [places, setPlaces] = useState<Restaurant[]>([]);
+  const [placesLoading, setPlacesLoading] = useState(false);
+  const [placeTypes, setPlaceTypes] = useState<PlaceType[]>(['restaurant']);
+
+  const togglePlaceType = (type: PlaceType) => {
+    setPlaceTypes((prev) =>
+      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
+    );
+  };
 
   // Create a stable key for addresses to use in useMemo
   const addressesKey = useMemo(() => {
@@ -65,6 +74,48 @@ export default function Home() {
       setRadiusKm(getDefaultRadiusKm(midpoint, coordinatesForRadius));
     }
   }, [midpoint?.lat, midpoint?.lon, coordinatesForRadius.length, addressesKey]);
+
+  // Fetch places for each selected type in parallel; merge, tag with type, sort by distance
+  useEffect(() => {
+    if (!midpoint || !showMap || placeTypes.length === 0) {
+      setPlaces([]);
+      return;
+    }
+    let cancelled = false;
+    setPlacesLoading(true);
+    const base = `/api/restaurants?lat=${midpoint.lat}&lon=${midpoint.lon}&radiusKm=${radiusKm}`;
+    const center = { lat: midpoint.lat, lon: midpoint.lon };
+    Promise.all(
+      placeTypes.map((type) =>
+        fetch(`${base}&type=${type}`)
+          .then((res) => (res.ok ? res.json() : []))
+          .then((data: { id: string; name: string; lat: number; lon: number; cuisine?: string; priceRange?: string; openingHours?: string }[]) =>
+            (Array.isArray(data) ? data : []).map((p) => ({
+              ...p,
+              type,
+              id: `${type}-${p.id}`,
+            } as Restaurant))
+          )
+          .catch(() => [] as Restaurant[])
+      )
+    )
+      .then((arrays) => {
+        if (cancelled) return;
+        const merged: Restaurant[] = arrays.flat();
+        merged.sort((a, b) => {
+          const da = haversineDistanceKm(center, { lat: a.lat, lon: a.lon });
+          const db = haversineDistanceKm(center, { lat: b.lat, lon: b.lon });
+          return da - db;
+        });
+        setPlaces(merged);
+      })
+      .finally(() => {
+        if (!cancelled) setPlacesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [midpoint?.lat, midpoint?.lon, radiusKm, showMap, placeTypes.slice().sort().join(',')]);
 
   const handleAddressSelect = (userLabel: string, address: AddressSuggestion) => {
     setAddresses((prev) => {
@@ -181,23 +232,62 @@ export default function Home() {
 
               {/* Search radius slider – underneath places input, Germany-scale defaults (1 / 15 / 50 km) */}
               {showMap && midpoint && (
-                <div className="mt-6 pt-4 border-t border-gray-200">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Search radius: {radiusKm} km
-                  </label>
-                  <input
-                    type="range"
-                    min={1}
-                    max={100}
-                    step={1}
-                    value={radiusKm}
-                    onChange={(e) => setRadiusKm(Number(e.target.value))}
-                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                  />
-                  <div className="flex justify-between text-xs text-gray-500 mt-1">
-                    <span>1 km</span>
-                    <span>100 km</span>
+                <div className="mt-6 pt-4 border-t border-gray-200 space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Search radius: {radiusKm} km
+                    </label>
+                    <input
+                      type="range"
+                      min={1}
+                      max={100}
+                      step={1}
+                      value={radiusKm}
+                      onChange={(e) => setRadiusKm(Number(e.target.value))}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                    />
+                    <div className="flex justify-between text-xs text-gray-500 mt-1">
+                      <span>1 km</span>
+                      <span>100 km</span>
+                    </div>
                   </div>
+                  <fieldset>
+                    <legend className="block text-sm font-medium text-gray-700 mb-2">
+                      Show places (multiselect)
+                    </legend>
+                    <div className="flex flex-wrap gap-4">
+                      <label className="inline-flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={placeTypes.includes('restaurant')}
+                          onChange={() => togglePlaceType('restaurant')}
+                          className="rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+                        />
+                        <span className="text-sm text-gray-700">Restaurants</span>
+                        <span className="w-3 h-3 rounded-full bg-[#ea580c]" aria-hidden />
+                      </label>
+                      <label className="inline-flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={placeTypes.includes('bar')}
+                          onChange={() => togglePlaceType('bar')}
+                          className="rounded border-gray-300 text-violet-600 focus:ring-violet-500"
+                        />
+                        <span className="text-sm text-gray-700">Bars</span>
+                        <span className="w-3 h-3 rounded-full bg-[#7c3aed]" aria-hidden />
+                      </label>
+                      <label className="inline-flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={placeTypes.includes('hotel')}
+                          onChange={() => togglePlaceType('hotel')}
+                          className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                        />
+                        <span className="text-sm text-gray-700">Hotels</span>
+                        <span className="w-3 h-3 rounded-full bg-[#059669]" aria-hidden />
+                      </label>
+                    </div>
+                  </fieldset>
                 </div>
               )}
             </div>
@@ -209,7 +299,25 @@ export default function Home() {
               Map View
             </h2>
             {showMap && addresses.length > 0 ? (
-              <MapDisplay startpoints={mapPoints} midpoint={midpoint} radiusKm={radiusKm} />
+              <>
+                <MapDisplay
+                  startpoints={mapPoints}
+                  midpoint={midpoint}
+                  radiusKm={radiusKm}
+                  restaurants={places}
+                />
+                {placesLoading && (
+                  <p className="text-sm text-gray-500 mt-2">Loading places…</p>
+                )}
+                {!placesLoading && midpoint && placeTypes.length > 0 && (
+                  <p className="text-sm text-gray-500 mt-2">
+                    {places.length} place{places.length !== 1 ? 's' : ''} in radius
+                    {placeTypes.length > 0 && (
+                      <> ({places.filter((p) => p.type === 'restaurant').length} restaurants, {places.filter((p) => p.type === 'bar').length} bars, {places.filter((p) => p.type === 'hotel').length} hotels)</>
+                    )}
+                  </p>
+                )}
+              </>
             ) : (
               <div className="h-[500px] flex items-center justify-center border border-gray-300 rounded-lg bg-gray-50">
                 <div className="text-center text-gray-500">
