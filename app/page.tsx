@@ -84,7 +84,7 @@ export default function Home() {
           triggerRecording={triggerRecording}
         />
 
-        <div className="max-w-2xl mx-auto px-4 pb-16">
+        <div className="max-w-2xl mx-auto px-4 pb-[400px] overflow-visible">
           <MatesSection
             users={users}
             onRemoveUser={removeUser}

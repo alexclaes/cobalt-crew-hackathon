@@ -33,15 +33,15 @@ export function TripThemeSection({
   };
 
   return (
-    <section>
-      <div className="bg-white border-[3px] border-black rounded-2xl p-6 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
+    <section className="relative">
+      <div className="bg-white border-[3px] border-black rounded-2xl p-6 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] overflow-visible">
         {/* Section Header */}
         <h2 className="text-xl font-bold text-black font-sans mb-4">
           Trip Theme
         </h2>
 
         {/* Dropdown */}
-        <div className="relative mb-4">
+        <div className="relative mb-4 z-50">
           <button
             onClick={() => setIsOpen(!isOpen)}
             disabled={themes.length === 0}
@@ -62,7 +62,7 @@ export function TripThemeSection({
 
           {/* Dropdown Menu */}
           {isOpen && themes.length > 0 && (
-            <div className="absolute top-full left-0 right-0 mt-2 bg-white border-[3px] border-black rounded-lg overflow-hidden shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] z-20">
+            <div className="absolute top-full left-0 right-0 mt-2 bg-white border-[3px] border-black rounded-lg overflow-hidden shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] z-50 max-h-[300px] overflow-y-auto">
               {themes.map((theme, index) => {
                 const bgColors = [
                   "bg-[#ff69b4]/20",
