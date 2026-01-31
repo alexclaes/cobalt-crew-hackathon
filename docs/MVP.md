@@ -36,28 +36,7 @@ Everything else (user system, calendar, advanced filters) will **not** be implem
 - Dummy data for restaurants or hotels
 - Mock calendar field (“suggest date range”) with no real integration
 
----
 
-## ⚙️ Tech Stack (fast & practical)
-- **Frontend:** React + Vite + Tailwind
-- **Map:** Leaflet + OpenStreetMap tiles
-- **Backend (lightweight):** Node.js + Express + simple JSON API
-- **Database:** None (for MVP). Store data in-memory or in JSON file.
-- **APIs:** OpenTripMap or GeoDB Cities API
-
----
-
-## 👥 Team Roles
-
-| Role | Responsibility | Tasks |
-|------|----------------|--------|
-| Dev 1 – Frontend | UI & Map | Map components, form input, preview page, share link |
-| Dev 2 – Backend/API | Geo logic | Midpoint calculation, city search, API endpoints |
-| Dev 3 – Integrator | DevOps & glue | Routing, deployment (Vercel/Render), styling & testing |
-
-🕒 Tip: Reserve the final 2 hours for polishing and demo prep.
-
----
 
 ## ⏱️ Time Schedule
 
