@@ -33,15 +33,15 @@ export function TripThemeSection({
   };
 
   return (
-    <section className="relative">
+    <section className="relative space-y-4">
       <div className="bg-white border-[3px] border-black rounded-2xl p-6 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] overflow-visible">
         {/* Section Header */}
         <h2 className="text-xl font-bold text-black font-sans mb-4">
-          Trip Theme
+          What are you up for?
         </h2>
 
         {/* Dropdown */}
-        <div className="relative mb-4 z-50">
+        <div className="relative z-50">
           <button
             onClick={() => setIsOpen(!isOpen)}
             disabled={themes.length === 0}
@@ -88,33 +88,33 @@ export function TripThemeSection({
             </div>
           )}
         </div>
-
-        {/* Create Trip Button or Warning */}
-        {canCreateTrip && selectedThemeId ? (
-          <button
-            onClick={onCreateTrip}
-            disabled={isCreating}
-            className="w-full bg-[#ff1493] text-white font-mono font-bold text-sm px-5 py-3 rounded-lg border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-          >
-            {isCreating && (
-              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            )}
-            {isCreating ? "Creating Trip..." : "Plan your Trip"}
-          </button>
-        ) : !selectedThemeId ? (
-          <div className="bg-[#ffe135]/50 border-[2px] border-[#ffe135] rounded-lg px-4 py-3">
-            <p className="text-sm text-amber-900 font-mono">
-              Please select a trip theme
-            </p>
-          </div>
-        ) : (
-          <div className="bg-[#ffe135]/50 border-[2px] border-[#ffe135] rounded-lg px-4 py-3">
-            <p className="text-sm text-amber-900 font-mono">
-              {validationMessage || "Add at least two mates with complete information"}
-            </p>
-          </div>
-        )}
       </div>
+
+      {/* Create Trip Button or Warning - Outside the white card */}
+      {canCreateTrip && selectedThemeId ? (
+        <button
+          onClick={onCreateTrip}
+          disabled={isCreating}
+          className="w-full bg-[#ff1493] text-white font-mono font-bold text-sm px-5 py-3 rounded-lg border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        >
+          {isCreating && (
+            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          )}
+          {isCreating ? "Creating Trip..." : "Plan your Trip"}
+        </button>
+      ) : !selectedThemeId ? (
+        <div className="bg-[#ffe135]/50 border-[2px] border-[#ffe135] rounded-lg px-4 py-3">
+          <p className="text-sm text-amber-900 font-mono">
+            Please select a trip theme
+          </p>
+        </div>
+      ) : (
+        <div className="bg-[#ffe135]/50 border-[2px] border-[#ffe135] rounded-lg px-4 py-3">
+          <p className="text-sm text-amber-900 font-mono">
+            {validationMessage || "Add at least two mates with complete information"}
+          </p>
+        </div>
+      )}
     </section>
   );
 }
