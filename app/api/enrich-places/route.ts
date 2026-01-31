@@ -37,11 +37,11 @@ export interface EnrichedPlace extends PlaceInput {
 
 const SYSTEM_PROMPT = `You are a helpful assistant. You output only valid JSON. All places you receive are already near the given midpoint (within radiusKm). For each place, add or refine: cost (exactly one of "€", "€€", "€€€"), rating (number 0–5 or "unknown"), openingHours (string or keep existing), cuisine (string), veganOptions ("yes" | "no" | "unknown"), vegetarianOptions ("yes" | "no" | "unknown"). If you don't know, use "unknown". 
 
-Additionally, analyze enriched places separately by their type (restaurant, bar, hotel) and recommend the best location for EACH category based on all factors: rating, distance to midpoint, price value, cuisine/appeal, dietary options (for restaurants/bars), and opening hours. Consider the overall best balance of these factors for each category.
+Additionally, analyze enriched places separately by their type and recommend the best location for EACH category based on all factors: rating, distance to midpoint, price value, cuisine/appeal, dietary options (for restaurants/bars), and opening hours. Consider the overall best balance of these factors for each category.
 
 Return a JSON object with two keys:
 1. "places": an array of objects; each object must include "id" (same as input) plus the enriched fields above.
-2. "recommendations": an object with keys "restaurant", "bar", and "hotel". Each key contains an object with "placeId" (the id of the recommended place of that type, or null if no suitable place) and optionally "reasoning" (a brief 1-2 sentence explanation). Only include recommendations for categories that have places in the input.`;
+2. "recommendations": an object with keys matching the place types in the input (e.g., "restaurant", "bar", "hotel", "camping", "hostel", "shop", "museum", "theatre", "spa", "natural formations", "brewery map", "historic", "elevation", "dog map"). Each key contains an object with "placeId" (the id of the recommended place of that type, or null if no suitable place) and optionally "reasoning" (a brief 1-2 sentence explanation). Only include recommendations for categories that have places in the input and are in the placeTypes array.`;
 
 function buildUserPrompt(
   midpoint: { lat: number; lon: number },
@@ -52,7 +52,7 @@ function buildUserPrompt(
   const payload = JSON.stringify({ midpoint, radiusKm, places, placeTypes });
   return `${payload}\n\nOnly include and enrich places that are near this midpoint (they already are; do not add new locations). All places in the list are near the given midpoint (within radiusKm). Only return these same places with enriched fields; do not add or suggest other locations.
 
-After enriching all places, analyze them separately by type (restaurant, bar, hotel). For each category that has places in the input, recommend the single best location of that type considering: rating quality, distance to midpoint (closer is better), price value (balance of cost and quality), cuisine/appeal, dietary accommodation (for restaurants/bars), and opening hours availability. Only generate recommendations for categories that are in the placeTypes array and have places of that type in the input.`;
+After enriching all places, analyze them separately by type. For each category that has places in the input, recommend the single best location of that type considering: rating quality, distance to midpoint (closer is better), price value (balance of cost and quality), cuisine/appeal (for restaurants/bars), dietary accommodation (for restaurants/bars), opening hours availability, and category-specific factors (e.g., natural beauty for natural formations, elevation for peaks, accessibility for family-friendly places). Only generate recommendations for categories that are in the placeTypes array and have places of that type in the input.`;
 }
 
 function mergeEnriched(
@@ -137,11 +137,7 @@ export async function POST(request: NextRequest) {
 
     let parsed: { 
       places?: EnrichedItem[]; 
-      recommendations?: { 
-        restaurant?: { placeId: string | null; reasoning?: string };
-        bar?: { placeId: string | null; reasoning?: string };
-        hotel?: { placeId: string | null; reasoning?: string };
-      };
+      recommendations?: Record<string, { placeId: string | null; reasoning?: string }>;
     };
     try {
       parsed = JSON.parse(content);
@@ -162,20 +158,12 @@ export async function POST(request: NextRequest) {
     console.log('[Enrich API] Recommendations:', JSON.stringify(recommendations, null, 2));
     
     // Build recommendations object, only including categories that are in placeTypes
-    const recommendationsResponse: {
-      restaurant?: { placeId: string | null; reasoning?: string };
-      bar?: { placeId: string | null; reasoning?: string };
-      hotel?: { placeId: string | null; reasoning?: string };
-    } = {};
+    const recommendationsResponse: Record<string, { placeId: string | null; reasoning?: string }> = {};
     
-    if (placeTypes.includes('restaurant') && recommendations.restaurant) {
-      recommendationsResponse.restaurant = recommendations.restaurant;
-    }
-    if (placeTypes.includes('bar') && recommendations.bar) {
-      recommendationsResponse.bar = recommendations.bar;
-    }
-    if (placeTypes.includes('hotel') && recommendations.hotel) {
-      recommendationsResponse.hotel = recommendations.hotel;
+    for (const placeType of placeTypes) {
+      if (recommendations[placeType]) {
+        recommendationsResponse[placeType] = recommendations[placeType];
+      }
     }
     
     return NextResponse.json({

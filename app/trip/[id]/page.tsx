@@ -8,6 +8,7 @@ import Recommendation from '@/components/Recommendation';
 import { calculateMidpoint, getDefaultRadiusKm, haversineDistanceKm, Coordinate } from '@/lib/midpoint';
 import type { MapPoint, Restaurant, PlaceType } from '@/components/MapDisplay';
 import type { Trip } from '@/types/trip';
+import { getPlaceTypesForTheme } from '@/lib/theme-place-types';
 
 function getTripTitle(trip: Trip | null): string {
   if (!trip || !trip.theme) {
@@ -41,12 +42,12 @@ export default function TripPage() {
   const [places, setPlaces] = useState<Restaurant[]>([]);
   const [placesLoading, setPlacesLoading] = useState(false);
   const [enrichmentLoading, setEnrichmentLoading] = useState(false);
-  const [placeTypes] = useState<PlaceType[]>(['restaurant', 'bar', 'hotel']); // Always fetch all three types
-  const [recommendations, setRecommendations] = useState<{
-    restaurant?: { current: { place: Restaurant; reasoning?: string } | null; previous: { place: Restaurant; reasoning?: string } | null };
-    bar?: { current: { place: Restaurant; reasoning?: string } | null; previous: { place: Restaurant; reasoning?: string } | null };
-    hotel?: { current: { place: Restaurant; reasoning?: string } | null; previous: { place: Restaurant; reasoning?: string } | null };
-  }>({});
+  // Calculate place types based on trip theme
+  const placeTypes = useMemo(() => {
+    if (!trip?.theme?.name) return ['restaurant', 'bar', 'hotel'] as PlaceType[];
+    return getPlaceTypesForTheme(trip.theme.name);
+  }, [trip?.theme?.name]);
+  const [recommendations, setRecommendations] = useState<Record<string, { current: { place: Restaurant; reasoning?: string } | null; previous: { place: Restaurant; reasoning?: string } | null }>>({});
   const [isRegenerating, setIsRegenerating] = useState<PlaceType | null>(null);
   const [hasNoRecommendation, setHasNoRecommendation] = useState(false);
   const lastEnrichedKeyRef = useRef<string | null>(null);
@@ -77,16 +78,12 @@ export default function TripPage() {
         // Load stored recommendations if they exist
         if (tripData.recommendation) {
           setRecommendations(tripData.recommendation);
-          // Track which categories have stored recommendations
+          // Track which categories have stored recommendations (check all categories in the recommendation object)
           hasStoredRecommendationsRef.current = new Set();
-          if (tripData.recommendation.restaurant?.current) {
-            hasStoredRecommendationsRef.current.add('restaurant');
-          }
-          if (tripData.recommendation.bar?.current) {
-            hasStoredRecommendationsRef.current.add('bar');
-          }
-          if (tripData.recommendation.hotel?.current) {
-            hasStoredRecommendationsRef.current.add('hotel');
+          for (const category in tripData.recommendation) {
+            if (tripData.recommendation[category]?.current) {
+              hasStoredRecommendationsRef.current.add(category as PlaceType);
+            }
           }
         } else {
           setRecommendations({});
@@ -158,14 +155,16 @@ export default function TripPage() {
       return;
     }
 
-    // Check if stored places match current parameters
+    // Check if stored places match current parameters (including theme)
     const storedMetadata = trip.placesMetadata;
     const placeTypesStr = placeTypes.slice().sort().join(',');
+    const themeName = trip.theme?.name || '';
     const metadataMatches = storedMetadata &&
       storedMetadata.midpointLat === midpoint.lat &&
       storedMetadata.midpointLon === midpoint.lon &&
       storedMetadata.radiusKm === fetchRadiusKm &&
-      storedMetadata.placeTypes?.slice().sort().join(',') === placeTypesStr;
+      storedMetadata.placeTypes?.slice().sort().join(',') === placeTypesStr &&
+      storedMetadata.themeName === themeName;
 
     // If we have matching cached places, use them (no loading spinner)
     if (metadataMatches && trip.places && Array.isArray(trip.places) && trip.places.length > 0) {
@@ -205,6 +204,7 @@ export default function TripPage() {
                   midpointLon: midpoint.lon,
                   radiusKm: fetchRadiusKm,
                   placeTypes: placeTypes.slice(),
+                  themeName: trip.theme?.name || '',
                 },
               }),
             }).catch((err) => {
@@ -255,7 +255,7 @@ export default function TripPage() {
       body: JSON.stringify({ places, midpoint, radiusKm: fetchRadiusKm, placeTypes }),
     })
       .then((r) => r.json())
-      .then((response: { places?: Restaurant[]; recommendations?: { restaurant?: { placeId: string | null; reasoning?: string }; bar?: { placeId: string | null; reasoning?: string }; hotel?: { placeId: string | null; reasoning?: string } } }) => {
+      .then((response: { places?: Restaurant[]; recommendations?: Record<string, { placeId: string | null; reasoning?: string }> }) => {
         if (!cancelled) {
           if (Array.isArray(response.places)) {
             setPlaces(response.places);
@@ -271,6 +271,7 @@ export default function TripPage() {
                     midpointLon: midpoint.lon,
                     radiusKm: fetchRadiusKm,
                     placeTypes: placeTypes.slice(),
+                    themeName: trip?.theme?.name || '',
                   },
                 }),
               }).catch((err) => {
@@ -284,7 +285,8 @@ export default function TripPage() {
             setRecommendations((prev) => {
               const updated = { ...prev };
               
-              for (const category of ['restaurant', 'bar', 'hotel'] as PlaceType[]) {
+              // Process recommendations for all place types in the theme
+              for (const category of placeTypes) {
                 const categoryRec = response.recommendations?.[category];
                 if (categoryRec && categoryRec.placeId) {
                   // Find the full place data from enriched places

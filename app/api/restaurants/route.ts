@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { haversineDistanceKm } from '@/lib/midpoint';
+import type { PlaceType } from '@/lib/theme-place-types';
 
 // Try multiple Overpass endpoints; overpass-api.de can return 502/504 when overloaded
 const OVERPASS_ENDPOINTS = [
@@ -9,7 +10,7 @@ const OVERPASS_ENDPOINTS = [
 ];
 const USER_AGENT = 'CobaltCrewHackathon/1.0 (meetup midpoint finder)';
 
-export type PlaceType = 'restaurant' | 'bar' | 'hotel';
+export type { PlaceType };
 
 export interface RestaurantResult {
   id: string;
@@ -22,13 +23,24 @@ export interface RestaurantResult {
 }
 
 /** Overpass filter for each place type (nodes + ways). */
-const PLACE_QUERIES: Record<
+const PLACE_QUERIES: Partial<Record<
   PlaceType,
   { node: string; way: string }
-> = {
+>> = {
   restaurant: { node: 'node["amenity"="restaurant"]', way: 'way["amenity"="restaurant"]' },
   bar: { node: 'node["amenity"="bar"]', way: 'way["amenity"="bar"]' },
   hotel: { node: 'node["tourism"="hotel"]', way: 'way["tourism"="hotel"]' },
+  camping: { node: 'node["tourism"="camping_site"]', way: 'way["tourism"="camping_site"]' },
+  hostel: { node: 'node["tourism"="hostel"]', way: 'way["tourism"="hostel"]' },
+  shop: { node: 'node["shop"]', way: 'way["shop"]' },
+  museum: { node: 'node["tourism"="museum"]', way: 'way["tourism"="museum"]' },
+  theatre: { node: 'node["amenity"="theatre"]', way: 'way["amenity"="theatre"]' },
+  spa: { node: 'node["leisure"="spa"]', way: 'way["leisure"="spa"]' },
+  'natural formations': { node: 'node["natural"]', way: 'way["natural"]' },
+  'brewery map': { node: 'node["amenity"="brewery"]', way: 'way["amenity"="brewery"]' },
+  historic: { node: 'node["tourism"="historic"]', way: 'way["tourism"="historic"]' },
+  elevation: { node: 'node["natural"="peak"]', way: 'way["natural"="peak"]' },
+  'dog map': { node: 'node["amenity"="dog_park"]', way: 'way["amenity"="dog_park"]' },
 };
 
 interface OverpassElement {
@@ -77,10 +89,16 @@ export async function GET(request: NextRequest) {
   const typesParam = searchParams.get('types') || searchParams.get('type') || 'restaurant';
   
   // Support both single type and comma-separated types
+  const validPlaceTypes: PlaceType[] = [
+    'restaurant', 'bar', 'hotel', 'camping', 'hostel', 'shop',
+    'museum', 'theatre', 'spa', 'natural formations', 'brewery map',
+    'historic', 'elevation', 'dog map'
+  ];
+  
   const requestedTypes: PlaceType[] = typesParam
     .split(',')
-    .map(t => t.trim().toLowerCase())
-    .filter(t => ['restaurant', 'bar', 'hotel'].includes(t))
+    .map(t => t.trim())
+    .filter(t => validPlaceTypes.includes(t as PlaceType))
     .map(t => t as PlaceType);
   
   if (requestedTypes.length === 0) {
@@ -105,9 +123,11 @@ export async function GET(request: NextRequest) {
   // Build combined query for all requested types
   const queryParts: string[] = [];
   for (const placeType of requestedTypes) {
-    const { node: nodeFilter, way: wayFilter } = PLACE_QUERIES[placeType];
-    queryParts.push(`${nodeFilter}(around:${radiusM},${latNum},${lonNum});`);
-    queryParts.push(`${wayFilter}(around:${radiusM},${latNum},${lonNum});`);
+    const query = PLACE_QUERIES[placeType];
+    if (query) {
+      queryParts.push(`${query.node}(around:${radiusM},${latNum},${lonNum});`);
+      queryParts.push(`${query.way}(around:${radiusM},${latNum},${lonNum});`);
+    }
   }
 
   // Overpass QL: nodes and ways for all requested types within radius; out center for ways
@@ -142,25 +162,35 @@ out center;
       const center = { lat: latNum, lon: lonNum };
 
       // Group results by type and limit per category
-      const resultsByType: Record<PlaceType, RestaurantResult[]> = {
-        restaurant: [],
-        bar: [],
-        hotel: [],
-      };
+      const resultsByType: Partial<Record<PlaceType, RestaurantResult[]>> = {};
 
       for (const el of data.elements) {
         const tags = el.tags ?? {};
         let placeType: PlaceType | null = null;
         
-        // Determine type from OSM tags
+        // Determine type from OSM tags (check in order of specificity)
         if (tags.amenity === 'restaurant') placeType = 'restaurant';
         else if (tags.amenity === 'bar') placeType = 'bar';
         else if (tags.tourism === 'hotel') placeType = 'hotel';
+        else if (tags.tourism === 'camping_site') placeType = 'camping';
+        else if (tags.tourism === 'hostel') placeType = 'hostel';
+        else if (tags.shop) placeType = 'shop';
+        else if (tags.tourism === 'museum') placeType = 'museum';
+        else if (tags.amenity === 'theatre') placeType = 'theatre';
+        else if (tags.leisure === 'spa' || tags.amenity === 'spa') placeType = 'spa';
+        else if (tags.natural) placeType = 'natural formations';
+        else if (tags.amenity === 'brewery') placeType = 'brewery map';
+        else if (tags.tourism === 'historic') placeType = 'historic';
+        else if (tags.natural === 'peak') placeType = 'elevation';
+        else if (tags.amenity === 'dog_park') placeType = 'dog map';
         
         if (placeType && requestedTypes.includes(placeType)) {
+          if (!resultsByType[placeType]) {
+            resultsByType[placeType] = [];
+          }
           const r = elementToRestaurant(el, center);
           if (r) {
-            resultsByType[placeType].push(r);
+            resultsByType[placeType]!.push(r);
           }
         }
       }
@@ -170,7 +200,7 @@ out center;
       const allResults: Array<RestaurantResult & { type: PlaceType }> = [];
       
       for (const placeType of requestedTypes) {
-        const places = resultsByType[placeType];
+        const places = resultsByType[placeType] || [];
         places.sort((a, b) => {
           const da = haversineDistanceKm(center, { lat: a.lat, lon: a.lon });
           const db = haversineDistanceKm(center, { lat: b.lat, lon: b.lon });

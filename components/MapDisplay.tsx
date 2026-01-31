@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useMemo, memo, createRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Tooltip, Circle, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
+import type { PlaceType } from '@/lib/theme-place-types';
 
 export interface MapPoint {
   lat: number;
@@ -10,7 +11,7 @@ export interface MapPoint {
   label: string;
 }
 
-export type PlaceType = 'restaurant' | 'bar' | 'hotel';
+export type { PlaceType };
 
 /** Place from Overpass (OSM); API response + type; optionally enriched by OpenAI. */
 export interface Restaurant {
@@ -38,10 +39,21 @@ interface MapDisplayProps {
   recommendedPlaceIds?: Set<string>;
 }
 
-const PLACE_TYPE_LABELS: Record<PlaceType, string> = {
+const PLACE_TYPE_LABELS: Partial<Record<PlaceType, string>> = {
   restaurant: 'Restaurant',
   bar: 'Bar',
   hotel: 'Hotel',
+  camping: 'Camping',
+  hostel: 'Hostel',
+  shop: 'Shop',
+  museum: 'Museum',
+  theatre: 'Theatre',
+  spa: 'Spa',
+  'natural formations': 'Natural Formation',
+  'brewery map': 'Brewery',
+  historic: 'Historic Site',
+  elevation: 'Elevation Point',
+  'dog map': 'Dog Park',
 };
 
 /** Render rating 0–5 as star string (e.g. ★★★★☆). */
@@ -54,10 +66,21 @@ function ratingToStars(rating: string | number | undefined): string | null {
   return '★'.repeat(full) + '☆'.repeat(empty);
 }
 
-const PLACE_COLORS: Record<PlaceType, { bg: string; border: string }> = {
+const PLACE_COLORS: Partial<Record<PlaceType, { bg: string; border: string }>> = {
   restaurant: { bg: '#ea580c', border: '#c2410c' },
   bar: { bg: '#7c3aed', border: '#5b21b6' },
   hotel: { bg: '#059669', border: '#047857' },
+  camping: { bg: '#16a34a', border: '#15803d' },
+  hostel: { bg: '#0891b2', border: '#0e7490' },
+  shop: { bg: '#dc2626', border: '#b91c1c' },
+  museum: { bg: '#9333ea', border: '#7e22ce' },
+  theatre: { bg: '#c2410c', border: '#9a3412' },
+  spa: { bg: '#ec4899', border: '#db2777' },
+  'natural formations': { bg: '#65a30d', border: '#4d7c0f' },
+  'brewery map': { bg: '#d97706', border: '#b45309' },
+  historic: { bg: '#7c2d12', border: '#5c1d0a' },
+  elevation: { bg: '#475569', border: '#334155' },
+  'dog map': { bg: '#f59e0b', border: '#d97706' },
 };
 
 const placeIcons: Map<string, L.DivIcon> = new Map();
@@ -65,10 +88,10 @@ const placeIcons: Map<string, L.DivIcon> = new Map();
 function getPlaceIcon(type: PlaceType, isRecommended: boolean = false): L.DivIcon {
   const iconKey = `${type}-${isRecommended ? 'recommended' : 'normal'}`;
   if (!placeIcons.has(iconKey) && typeof window !== 'undefined') {
-    const colors = PLACE_COLORS[type];
+    const colors = PLACE_COLORS[type] || PLACE_COLORS.restaurant;
     if (!colors) {
       console.warn(`Unknown place type: ${type}, defaulting to restaurant colors`);
-      const { bg, border } = PLACE_COLORS.restaurant;
+      const { bg, border } = PLACE_COLORS.restaurant!;
       const icon = L.divIcon({
         className: `place-marker place-marker-unknown`,
         html: `<div style="
@@ -330,7 +353,7 @@ function MapDisplay({ startpoints, midpoint, radiusKm = DEFAULT_RADIUS_KM, resta
           >
             <Popup>
               <div className="text-xs font-medium text-blue-600 uppercase tracking-wide">
-                {PLACE_TYPE_LABELS[r.type]}
+                {PLACE_TYPE_LABELS[r.type] || r.type}
               </div>
               <div className="font-medium text-gray-900">{r.name}</div>
               {r.cuisine && r.cuisine !== 'unknown' && (

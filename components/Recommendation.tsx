@@ -4,15 +4,10 @@ import { useState } from 'react';
 import type { Restaurant } from './MapDisplay';
 import type { CategoryRecommendation } from '@/types/trip';
 import { haversineDistanceKm } from '@/lib/midpoint';
-
-type PlaceType = 'restaurant' | 'bar' | 'hotel';
+import type { PlaceType } from '@/lib/theme-place-types';
 
 interface RecommendationProps {
-  recommendations?: {
-    restaurant?: CategoryRecommendation;
-    bar?: CategoryRecommendation;
-    hotel?: CategoryRecommendation;
-  };
+  recommendations?: Record<string, CategoryRecommendation>; // Flexible for any PlaceType
   places?: Restaurant[];
   midpoint: { lat: number; lon: number } | null;
   isLoading?: boolean;
@@ -145,13 +140,24 @@ export default function Recommendation({
 
   // Determine which tabs to show (categories with recommendations or currently selected)
   const availableCategories: PlaceType[] = [];
-  const categoryLabels: Record<PlaceType, string> = {
+  const categoryLabels: Partial<Record<PlaceType, string>> = {
     restaurant: 'Restaurants',
     bar: 'Bars',
     hotel: 'Hotels',
+    camping: 'Camping',
+    hostel: 'Hostels',
+    shop: 'Shops',
+    museum: 'Museums',
+    theatre: 'Theatres',
+    spa: 'Spas',
+    'natural formations': 'Natural Formations',
+    'brewery map': 'Breweries',
+    historic: 'Historic Sites',
+    elevation: 'Elevation Points',
+    'dog map': 'Dog Parks',
   };
 
-  for (const type of ['restaurant', 'bar', 'hotel'] as PlaceType[]) {
+  for (const type of selectedPlaceTypes) {
     const hasRecommendation = recommendations?.[type]?.current !== null;
     const isSelected = selectedPlaceTypes.includes(type);
     if (hasRecommendation || isSelected) {
@@ -335,7 +341,7 @@ export default function Recommendation({
         </div>
       ) : (
         <div className="text-center py-8 text-gray-500">
-          <p>No recommendation available for {categoryLabels[activeTab].toLowerCase()} at this time.</p>
+          <p>No recommendation available for {categoryLabels[activeTab]?.toLowerCase() || activeTab} at this time.</p>
           <p className="text-sm mt-2">Please try adjusting your search criteria or radius.</p>
           {onRegenerate && (
             <button

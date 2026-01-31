@@ -47,16 +47,13 @@ export interface Trip {
   users: TripUser[];
   themeId?: string;
   theme?: TripTheme;
-  recommendation?: {
-    restaurant?: CategoryRecommendation;
-    bar?: CategoryRecommendation;
-    hotel?: CategoryRecommendation;
-  };
+  recommendation?: Record<string, CategoryRecommendation>; // Flexible for any PlaceType
   places?: Restaurant[];
   placesMetadata?: {
     midpointLat?: number;
     midpointLon?: number;
     radiusKm?: number;
     placeTypes?: string[];
+    themeName?: string;
   };
 }
