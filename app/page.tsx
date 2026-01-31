@@ -3,6 +3,10 @@
 import { useState, useMemo, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import AddressInput, { AddressSuggestion } from '@/components/AddressInput';
+import UserSelectionModal from '@/components/UserSelectionModal';
+import { calculateMidpoint, getDefaultRadiusKm, Coordinate } from '@/lib/midpoint';
+import type { MapPoint } from '@/components/MapDisplay';
+import { User } from '@/types/user';
 import { calculateMidpoint, getDefaultRadiusKm, haversineDistanceKm, Coordinate } from '@/lib/midpoint';
 import type { MapPoint, Restaurant, PlaceType } from '@/components/MapDisplay';
 
@@ -19,13 +23,17 @@ const MapDisplay = dynamic(() => import('@/components/MapDisplay'), {
   ),
 });
 
+type UserEntry = User & {
+  isPreConfigured: boolean;
+  userLabel: string; // e.g., "User 1", "User 2"
+};
+
 export default function Home() {
-  const [addresses, setAddresses] = useState<
-    Array<{ userLabel: string; address: AddressSuggestion }>
-  >([]);
-  const [userCount, setUserCount] = useState(2); // Start with 2 users
+  const [users, setUsers] = useState<UserEntry[]>([]);
+  const [manualUserCount, setManualUserCount] = useState(0);
   const [showMap, setShowMap] = useState(false);
   const [radiusKm, setRadiusKm] = useState(50); // default; updated from trip scale when map is shown
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [places, setPlaces] = useState<Restaurant[]>([]);
   const [placesLoading, setPlacesLoading] = useState(false);
   const [placeTypes, setPlaceTypes] = useState<PlaceType[]>(['restaurant']);
@@ -36,43 +44,44 @@ export default function Home() {
     );
   };
 
-  // Create a stable key for addresses to use in useMemo
-  const addressesKey = useMemo(() => {
-    return addresses.map(a => `${a.userLabel}:${a.address.lat.toFixed(6)},${a.address.lon.toFixed(6)}`).join('|');
-  }, [addresses]);
+  // Create a stable key for users to use in useMemo
+  const usersKey = useMemo(() => {
+    return users.map(u => `${u.id}:${u.lat.toFixed(6)},${u.lon.toFixed(6)}`).join('|');
+  }, [users]);
 
   // Calculate midpoint only when showMap is true - memoize to prevent object recreation
   const midpoint = useMemo(() => {
-    if (!showMap || addresses.length < 2) {
+    if (!showMap || users.length < 2) {
       return null;
     }
-    const coordinates: Coordinate[] = addresses.map((addr) => ({
-      lat: addr.address.lat,
-      lon: addr.address.lon,
+    const coordinates: Coordinate[] = users.map((user) => ({
+      lat: user.lat,
+      lon: user.lon,
     }));
     const result = calculateMidpoint(coordinates);
     // Return null if calculation failed, otherwise return the result
     return result;
-  }, [addressesKey, showMap, addresses.length]);
+  }, [usersKey, showMap, users.length]);
 
-  // Convert addresses to map points - use stable addressesKey
+  // Convert users to map points - use stable usersKey
   const mapPoints: MapPoint[] = useMemo(() => {
-    return addresses.map((addr) => ({
-      lat: addr.address.lat,
-      lon: addr.address.lon,
-      label: addr.userLabel,
+    return users.map((user) => ({
+      lat: user.lat,
+      lon: user.lon,
+      label: user.name,
     }));
-  }, [addressesKey]);
+  }, [usersKey]);
 
-  // Set default radius from trip scale (Germany: small 1 km, mid 15 km, large 50 km) when midpoint/addresses change
+  // Set default radius from trip scale (Germany: small 1 km, mid 15 km, large 50 km) when midpoint/users change
   const coordinatesForRadius = useMemo(
-    () => addresses.map((a) => ({ lat: a.address.lat, lon: a.address.lon })),
-    [addressesKey]
+    () => users.map((u) => ({ lat: u.lat, lon: u.lon })),
+    [usersKey]
   );
   useEffect(() => {
     if (midpoint && coordinatesForRadius.length >= 2) {
       setRadiusKm(getDefaultRadiusKm(midpoint, coordinatesForRadius));
     }
+  }, [midpoint?.lat, midpoint?.lon, coordinatesForRadius.length, usersKey]);
   }, [midpoint?.lat, midpoint?.lon, coordinatesForRadius.length, addressesKey]);
 
   // Fetch places for each selected type in parallel; merge, tag with type, sort by distance
@@ -117,38 +126,77 @@ export default function Home() {
     };
   }, [midpoint?.lat, midpoint?.lon, radiusKm, showMap, placeTypes.slice().sort().join(',')]);
 
-  const handleAddressSelect = (userLabel: string, address: AddressSuggestion) => {
-    setAddresses((prev) => {
-      const existingIndex = prev.findIndex((a) => a.userLabel === userLabel);
-      if (existingIndex >= 0) {
-        // Update existing address
-        const updated = [...prev];
-        updated[existingIndex] = { userLabel, address };
-        return updated;
-      } else {
-        // Add new address
-        return [...prev, { userLabel, address }];
-      }
+  const handleAddressSelect = (userId: string, address: AddressSuggestion) => {
+    setUsers((prev) => {
+      return prev.map((user) => {
+        if (user.id === userId) {
+          return {
+            ...user,
+            address: address.display_name,
+            lat: address.lat,
+            lon: address.lon,
+          };
+        }
+        return user;
+      });
     });
   };
 
-  const handleRemoveAddress = (userLabel: string) => {
-    setAddresses((prev) => prev.filter((a) => a.userLabel !== userLabel));
+  const handleRemoveUser = (userId: string) => {
+    setUsers((prev) => prev.filter((u) => u.id !== userId));
+    // If it's a manual user, decrement the counter
+    const user = users.find(u => u.id === userId);
+    if (user && !user.isPreConfigured) {
+      setManualUserCount((prev) => Math.max(0, prev - 1));
+    }
   };
 
-  const handleAddUser = () => {
-    setUserCount((prev) => Math.min(prev + 1, 10));
+  const handleNameChange = (userId: string, name: string) => {
+    setUsers((prev) => {
+      return prev.map((user) => {
+        if (user.id === userId) {
+          return { ...user, name };
+        }
+        return user;
+      });
+    });
+  };
+
+  const handleAddManualUser = () => {
+    const newCount = manualUserCount + 1;
+    const newUser: UserEntry = {
+      id: `manual-${Date.now()}`,
+      name: '',
+      address: '',
+      lat: 0,
+      lon: 0,
+      isPreConfigured: false,
+      userLabel: `User ${users.length + 1}`,
+    };
+    setUsers((prev) => [...prev, newUser]);
+    setManualUserCount(newCount);
+  };
+
+  const handleSelectPreConfiguredUsers = (selectedUsers: User[]) => {
+    const newUserEntries: UserEntry[] = selectedUsers.map((user, index) => ({
+      ...user,
+      isPreConfigured: true,
+      userLabel: `User ${users.length + index + 1}`,
+    }));
+    setUsers((prev) => [...prev, ...newUserEntries]);
   };
 
   const handleCalculateMidpoint = () => {
-    if (addresses.length >= 2) {
+    if (users.length >= 2) {
       setShowMap(true);
     }
   };
 
-  const maxUsers = 10;
-  const nextUserLabel = `User ${userCount + 1}`;
-  const canCalculate = addresses.length >= 2;
+  const alreadySelectedUserIds = users
+    .filter(u => u.isPreConfigured)
+    .map(u => u.id);
+
+  const canCalculate = users.length >= 2;
 
   return (
     <main className="min-h-screen bg-gray-50 py-8 px-4">
@@ -167,34 +215,51 @@ export default function Home() {
           <div className="space-y-6">
             <div className="bg-white rounded-lg shadow-md p-6">
               <h2 className="text-xl font-semibold text-gray-800 mb-4">
-                Add Start Locations
+                Add your Mates
               </h2>
 
               <div className="space-y-4">
                 {/* Render address inputs for each user */}
-                {Array.from({ length: userCount }, (_, i) => {
-                  const userLabel = `User ${i + 1}`;
-                  return (
+                {users.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <p className="mb-4">No mates added yet</p>
+                    <p className="text-sm">
+                      Choose from existing mates or add a mate manually to get started
+                    </p>
+                  </div>
+                ) : (
+                  users.map((user, index) => (
                     <AddressInput
-                      key={userLabel}
-                      userLabel={userLabel}
+                      key={user.id}
+                      userLabel={user.userLabel}
+                      userNumber={index + 1}
+                      userName={user.name}
+                      userAddress={user.address}
                       onAddressSelect={(address) =>
-                        handleAddressSelect(userLabel, address)
+                        handleAddressSelect(user.id, address)
                       }
-                      onRemove={() => handleRemoveAddress(userLabel)}
+                      onNameChange={(name) => handleNameChange(user.id, name)}
+                      onRemove={() => handleRemoveUser(user.id)}
+                      isReadOnly={user.isPreConfigured}
                     />
-                  );
-                })}
-
-                {/* Add new user button */}
-                {userCount < maxUsers && (
-                  <button
-                    onClick={handleAddUser}
-                    className="w-full py-2 px-4 border-2 border-dashed border-gray-300 rounded-md text-gray-600 hover:border-blue-500 hover:text-blue-600 transition-colors"
-                  >
-                    + Add {nextUserLabel}
-                  </button>
+                  ))
                 )}
+
+                {/* Add user buttons */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setIsModalOpen(true)}
+                    className="flex-1 py-2 px-4 border-2 border-dashed border-gray-300 rounded-md text-gray-600 hover:border-blue-500 hover:text-blue-600 transition-colors"
+                  >
+                    Choose from Existing Mates
+                  </button>
+                  <button
+                    onClick={handleAddManualUser}
+                    className="flex-1 py-2 px-4 border-2 border-dashed border-gray-300 rounded-md text-gray-600 hover:border-blue-500 hover:text-blue-600 transition-colors"
+                  >
+                    + Add Mate Manually
+                  </button>
+                </div>
               </div>
 
               {/* Calculate Midpoint Button */}
@@ -206,12 +271,12 @@ export default function Home() {
                         onClick={handleCalculateMidpoint}
                         className="w-full py-3 px-4 bg-blue-600 text-white rounded-md font-medium hover:bg-blue-700 transition-colors shadow-md"
                       >
-                        Calculate Midpoint
+                        Plan your Trip
                       </button>
                     ) : (
                       <div className="p-4 bg-yellow-50 rounded-md border border-yellow-200">
                         <div className="text-sm text-yellow-800">
-                          Add at least 2 addresses to calculate the midpoint
+                          Add at least two mates
                         </div>
                       </div>
                     )}
@@ -298,6 +363,8 @@ export default function Home() {
             <h2 className="text-xl font-semibold text-gray-800 mb-4">
               Map View
             </h2>
+            {showMap && users.length > 0 ? (
+              <MapDisplay startpoints={mapPoints} midpoint={midpoint} radiusKm={radiusKm} />
             {showMap && addresses.length > 0 ? (
               <>
                 <MapDisplay
@@ -335,8 +402,8 @@ export default function Home() {
                     />
                   </svg>
                   <p className="text-sm">
-                    {addresses.length === 0
-                      ? 'Add addresses and click "Calculate Midpoint" to see the map'
+                    {users.length === 0
+                      ? 'Add mates and click "Calculate Midpoint" to see the map'
                       : 'Click "Calculate Midpoint" to see the map'}
                   </p>
                 </div>
@@ -345,6 +412,14 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      {/* User Selection Modal */}
+      <UserSelectionModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSelectUsers={handleSelectPreConfiguredUsers}
+        alreadySelectedUserIds={alreadySelectedUserIds}
+      />
     </main>
   );
 }
