@@ -36,11 +36,11 @@ export default function Modal({
 
       {/* Modal */}
       <div
-        className={`relative bg-white rounded-lg shadow-xl ${maxWidthStyles[maxWidth]} w-full mx-4 max-h-[80vh] flex flex-col`}
+        className={`relative bg-white rounded-2xl border-[3px] border-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] ${maxWidthStyles[maxWidth]} w-full mx-4 max-h-[80vh] flex flex-col`}
       >
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900">{title}</h2>
+        <div className="px-6 py-4 border-b-[3px] border-black">
+          <h2 className="text-xl font-bold text-black font-sans">{title}</h2>
         </div>
 
         {/* Content */}
@@ -48,7 +48,7 @@ export default function Modal({
 
         {/* Footer */}
         {footer && (
-          <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+          <div className="px-6 py-4 border-t-[3px] border-black flex justify-end gap-3">
             {footer}
           </div>
         )}

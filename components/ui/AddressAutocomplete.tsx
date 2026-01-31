@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useRef } from 'react';
+import { forwardRef, useRef } from 'react';
 import { AddressSuggestion } from '@/hooks/useGeocoding';
 
 interface AddressAutocompleteProps {
@@ -39,7 +39,7 @@ const AddressAutocomplete = forwardRef<HTMLInputElement, AddressAutocompleteProp
     return (
       <div className="relative">
         {label && (
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-black mb-2 font-mono">
             {label}
             {required && <span className="text-red-500 ml-1">*</span>}
           </label>
@@ -52,13 +52,13 @@ const AddressAutocomplete = forwardRef<HTMLInputElement, AddressAutocompleteProp
             onChange={(e) => onQueryChange(e.target.value)}
             onFocus={onFocus}
             placeholder={placeholder}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+            className="w-full px-4 py-2 border-[3px] border-black rounded-lg font-mono text-sm focus:outline-none focus:ring-2 focus:ring-[#ff1493] bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
             disabled={!!selectedAddress}
           />
           {selectedAddress && (
             <button
               onClick={onClear}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-black/40 hover:text-[#ff1493]"
               aria-label="Clear address"
             >
               <svg
@@ -78,7 +78,7 @@ const AddressAutocomplete = forwardRef<HTMLInputElement, AddressAutocompleteProp
           )}
           {isLoading && (
             <div className="absolute right-2 top-1/2 -translate-y-1/2">
-              <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+              <div className="w-4 h-4 border-2 border-[#ff1493] border-t-transparent rounded-full animate-spin"></div>
             </div>
           )}
         </div>
@@ -86,15 +86,15 @@ const AddressAutocomplete = forwardRef<HTMLInputElement, AddressAutocompleteProp
         {showSuggestions && suggestions.length > 0 && (
           <div
             ref={suggestionsRef}
-            className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto"
+            className="absolute z-10 w-full mt-2 bg-white border-[3px] border-black rounded-lg shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] max-h-60 overflow-y-auto"
           >
             {suggestions.map((suggestion) => (
               <button
                 key={suggestion.place_id}
                 onClick={() => onSelect(suggestion)}
-                className="w-full text-left px-4 py-2 hover:bg-blue-50 focus:bg-blue-50 focus:outline-none transition-colors"
+                className="w-full text-left px-4 py-2 hover:bg-[#ff69b4]/10 focus:bg-[#ff69b4]/10 focus:outline-none transition-colors border-b border-black/10 last:border-b-0 font-mono text-sm"
               >
-                <div className="text-sm text-gray-900">
+                <div className="text-black">
                   {suggestion.display_name}
                 </div>
               </button>

@@ -2,6 +2,45 @@
 @tailwind components;
 @tailwind utilities;
 
+/* V0 Cute-alism Color Tokens */
+@layer base {
+  :root {
+    /* Cute-alism: Cobalt Blue + Hot Pink */
+    --background: oklch(0.98 0.01 330);
+    --foreground: oklch(0.1 0 0);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.1 0 0);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.1 0 0);
+    --primary: oklch(0.52 0.22 265);
+    --primary-foreground: oklch(1 0 0);
+    --secondary: oklch(0.78 0.18 340);
+    --secondary-foreground: oklch(0.1 0 0);
+    --muted: oklch(0.95 0.02 330);
+    --muted-foreground: oklch(0.4 0 0);
+    --accent: oklch(0.92 0.16 95);
+    --accent-foreground: oklch(0.1 0 0);
+    --destructive: oklch(0.6 0.22 25);
+    --destructive-foreground: oklch(1 0 0);
+    --border: oklch(0.1 0 0);
+    --input: oklch(1 0 0);
+    --ring: oklch(0.52 0.22 265);
+    --chart-1: oklch(0.52 0.22 265);
+    --chart-2: oklch(0.78 0.18 340);
+    --chart-3: oklch(0.92 0.16 95);
+    --chart-4: oklch(0.8 0.14 165);
+    --chart-5: oklch(0.85 0.12 290);
+    --radius: 0.75rem;
+
+    /* Cute-alism custom tokens */
+    --cute-pink: oklch(0.78 0.18 340);
+    --cute-mint: oklch(0.82 0.14 165);
+    --cute-lavender: oklch(0.85 0.12 290);
+    --cute-sunshine: oklch(0.92 0.16 95);
+    --cute-cobalt: oklch(0.52 0.22 265);
+  }
+}
+
 /* Next.js dev overlay (nextjs-portal): ensure overlay has valid dimensions; overlay content uses rem and needs a font-size reference */
 nextjs-portal {
   font-size: 16px;

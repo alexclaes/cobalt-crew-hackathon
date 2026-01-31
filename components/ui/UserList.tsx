@@ -19,7 +19,7 @@ export default function UserList({
 
   if (selectableUsers.length === 0) {
     return (
-      <div className="text-center py-8 text-gray-500">
+      <div className="text-center py-8 text-black/60 font-mono">
         All mates have been added already.
       </div>
     );
@@ -30,17 +30,17 @@ export default function UserList({
       {selectableUsers.map((user) => (
         <label
           key={user.id}
-          className="flex items-start gap-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+          className="flex items-start gap-3 p-3 border-[2px] border-black/20 rounded-lg hover:bg-[#ff69b4]/10 cursor-pointer transition-colors"
         >
           <input
             type="checkbox"
             checked={selectedIds.has(user.id)}
             onChange={() => onToggle(user.id)}
-            className="mt-1 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+            className="mt-1 w-4 h-4 text-[#ff1493] border-black/30 rounded focus:ring-[#ff1493]"
           />
           <div className="flex-1">
-            <div className="font-medium text-gray-900">{user.name}</div>
-            <div className="text-sm text-gray-600">{user.address}</div>
+            <div className="font-bold text-black font-mono">{user.name}</div>
+            <div className="text-sm text-black/60 font-mono">{user.address}</div>
           </div>
         </label>
       ))}
