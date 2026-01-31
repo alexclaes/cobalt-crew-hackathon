@@ -90,7 +90,7 @@ export default function UserSelectionModal({
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-900">
-            Choose from Existing Users
+            Choose from Existing Mates
           </h2>
         </div>
 
@@ -102,7 +102,7 @@ export default function UserSelectionModal({
             </div>
           ) : selectableUsers.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
-              All users have been added already.
+              All mates have been added already.
             </div>
           ) : (
             <>
@@ -164,7 +164,7 @@ export default function UserSelectionModal({
             disabled={selectedIds.size === 0}
             className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
           >
-            Add Selected Users ({selectedIds.size})
+            Add Selected Mates ({selectedIds.size})
           </button>
         </div>
       </div>

@@ -141,7 +141,7 @@ export default function Home() {
   const alreadySelectedUserIds = users
     .filter(u => u.isPreConfigured)
     .map(u => u.id);
-  
+
   const canCalculate = users.length >= 2;
 
   return (
@@ -161,16 +161,16 @@ export default function Home() {
           <div className="space-y-6">
             <div className="bg-white rounded-lg shadow-md p-6">
               <h2 className="text-xl font-semibold text-gray-800 mb-4">
-                Add Start Locations
+                Add your Mates
               </h2>
 
               <div className="space-y-4">
                 {/* Render address inputs for each user */}
                 {users.length === 0 ? (
                   <div className="text-center py-8 text-gray-500">
-                    <p className="mb-4">No users added yet</p>
+                    <p className="mb-4">No mates added yet</p>
                     <p className="text-sm">
-                      Choose from existing users or add a user manually to get started
+                      Choose from existing mates or add a mate manually to get started
                     </p>
                   </div>
                 ) : (
@@ -197,13 +197,13 @@ export default function Home() {
                     onClick={() => setIsModalOpen(true)}
                     className="flex-1 py-2 px-4 border-2 border-dashed border-gray-300 rounded-md text-gray-600 hover:border-blue-500 hover:text-blue-600 transition-colors"
                   >
-                    Choose from Existing Users
+                    Choose from Existing Mates
                   </button>
                   <button
                     onClick={handleAddManualUser}
                     className="flex-1 py-2 px-4 border-2 border-dashed border-gray-300 rounded-md text-gray-600 hover:border-blue-500 hover:text-blue-600 transition-colors"
                   >
-                    + Add User Manually
+                    + Add Mate Manually
                   </button>
                 </div>
               </div>
@@ -217,12 +217,12 @@ export default function Home() {
                         onClick={handleCalculateMidpoint}
                         className="w-full py-3 px-4 bg-blue-600 text-white rounded-md font-medium hover:bg-blue-700 transition-colors shadow-md"
                       >
-                        Calculate Midpoint
+                        Plan your Trip
                       </button>
                     ) : (
                       <div className="p-4 bg-yellow-50 rounded-md border border-yellow-200">
                         <div className="text-sm text-yellow-800">
-                          Add at least 2 addresses to calculate the midpoint
+                          Add at least two mates
                         </div>
                       </div>
                     )}
@@ -290,7 +290,7 @@ export default function Home() {
                   </svg>
                   <p className="text-sm">
                     {users.length === 0
-                      ? 'Add users and click "Calculate Midpoint" to see the map'
+                      ? 'Add mates and click "Calculate Midpoint" to see the map'
                       : 'Click "Calculate Midpoint" to see the map'}
                   </p>
                 </div>
