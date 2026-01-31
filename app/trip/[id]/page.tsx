@@ -4,9 +4,17 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { useParams } from 'next/navigation';
 import MatesList from '@/components/MatesList';
+import Recommendation from '@/components/Recommendation';
 import { calculateMidpoint, getDefaultRadiusKm, haversineDistanceKm, Coordinate } from '@/lib/midpoint';
 import type { MapPoint, Restaurant, PlaceType } from '@/components/MapDisplay';
 import type { Trip } from '@/types/trip';
+
+function getTripTitle(trip: Trip | null): string {
+  if (!trip || !trip.theme) {
+    return 'Trip Planning';
+  }
+  return `${trip.theme.icon} ${trip.theme.name} Trip Planning`;
+}
 
 // Dynamically import MapDisplay with SSR disabled
 const MapDisplay = dynamic(() => import('@/components/MapDisplay'), {
@@ -33,6 +41,7 @@ export default function TripPage() {
   const [placesLoading, setPlacesLoading] = useState(false);
   const [enrichmentLoading, setEnrichmentLoading] = useState(false);
   const [placeTypes, setPlaceTypes] = useState<PlaceType[]>(['restaurant']);
+  const [recommendation, setRecommendation] = useState<{ placeId: string; reasoning?: string } | null>(null);
   const lastEnrichedKeyRef = useRef<string | null>(null);
 
   const togglePlaceType = (type: PlaceType) => {
@@ -108,6 +117,7 @@ export default function TripPage() {
   useEffect(() => {
     if (!midpoint || placeTypes.length === 0) {
       setPlaces([]);
+      setRecommendation(null);
       return;
     }
 
@@ -142,10 +152,12 @@ export default function TripPage() {
             haversineDistanceKm(midpoint, { lat: b.lat, lon: b.lon })
         );
         setPlaces(merged);
+        setRecommendation(null); // Clear recommendation when places change
       })
       .catch((err) => {
         console.error('Error fetching places:', err);
         setPlaces([]);
+        setRecommendation(null);
       })
       .finally(() => {
         if (!cancelled) setPlacesLoading(false);
@@ -172,14 +184,24 @@ export default function TripPage() {
       body: JSON.stringify({ places, midpoint, radiusKm }),
     })
       .then((r) => r.json())
-      .then((enriched: Restaurant[]) => {
-        if (!cancelled && Array.isArray(enriched)) {
-          setPlaces(enriched);
+      .then((response: { places?: Restaurant[]; recommendation?: { placeId: string; reasoning?: string } | null }) => {
+        if (!cancelled) {
+          if (Array.isArray(response.places)) {
+            setPlaces(response.places);
+          }
+          if (response.recommendation && response.recommendation.placeId) {
+            setRecommendation(response.recommendation);
+          } else {
+            setRecommendation(null);
+          }
           lastEnrichedKeyRef.current = batchKey;
         }
       })
       .catch((err) => {
         console.error('Enrichment error:', err);
+        if (!cancelled) {
+          setRecommendation(null);
+        }
       })
       .finally(() => {
         if (!cancelled) setEnrichmentLoading(false);
@@ -270,7 +292,7 @@ export default function TripPage() {
           </a>
           
           <h1 className="text-4xl font-bold text-gray-900 mb-2">
-            Trip Planning
+            {getTripTitle(trip)}
           </h1>
           <p className="text-gray-600">
             View your trip details and the calculated midpoint
@@ -428,8 +450,19 @@ export default function TripPage() {
             </div>
           </div>
 
-          {/* Right Column: Mates List */}
-          <div>
+          {/* Right Column: Recommendation and Mates List */}
+          <div className="space-y-6">
+            <Recommendation
+              recommendedPlace={
+                recommendation?.placeId
+                  ? places.find((p) => p.id === recommendation.placeId) || null
+                  : null
+              }
+              midpoint={midpoint}
+              reasoning={recommendation?.reasoning}
+              isLoading={enrichmentLoading || (places.length > 0 && !recommendation && !placesLoading)}
+              themeIcon={trip?.theme?.icon}
+            />
             <MatesList users={trip.users} />
           </div>
         </div>

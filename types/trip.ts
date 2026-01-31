@@ -38,4 +38,5 @@ export interface Trip {
   createdAt: string;
   users: TripUser[];
   themeId?: string;
+  theme?: TripTheme;
 }

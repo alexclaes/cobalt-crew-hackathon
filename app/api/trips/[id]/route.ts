@@ -1,6 +1,6 @@
 import { neon } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
-import type { Trip } from '@/types/trip';
+import type { Trip, TripTheme } from '@/types/trip';
 
 const sql = neon(process.env.DATABASE_URL!);
 
@@ -20,11 +20,18 @@ export async function GET(
       );
     }
 
-    // Query database for trip
+    // Query database for trip with theme information
     const result = await sql`
-      SELECT id, created_at, users
-      FROM trips
-      WHERE id = ${id}
+      SELECT 
+        t.id, 
+        t.created_at, 
+        t.users,
+        t.theme_id,
+        tt.name as theme_name,
+        tt.icon as theme_icon
+      FROM trips t
+      LEFT JOIN trip_themes tt ON t.theme_id = tt.id
+      WHERE t.id = ${id}
     `;
 
     if (result.length === 0) {
@@ -39,6 +46,12 @@ export async function GET(
       id: row.id,
       createdAt: row.created_at,
       users: row.users,
+      themeId: row.theme_id,
+      theme: row.theme_id ? {
+        id: row.theme_id,
+        name: row.theme_name,
+        icon: row.theme_icon,
+      } : undefined,
     };
 
     return NextResponse.json(trip);
