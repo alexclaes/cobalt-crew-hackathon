@@ -12,7 +12,7 @@
     "@neondatabase/serverless": "^1.0.2",
     "leaflet": "^1.9.4",
     "next": "^16.1.6",
-    "openai": "^4.77.0",
+    "openai": "^4.104.0",
     "react": "^19",
     "react-dom": "^19",
     "react-leaflet": "^5.0.0"
