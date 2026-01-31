@@ -2,16 +2,18 @@
 
 import { useState, useRef, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import AddressInput, { AddressSuggestion } from '@/components/AddressInput';
 import UserSelectionModal from '@/components/UserSelectionModal';
+import AddManualMateModal from '@/components/AddManualMateModal';
+import MateCard from '@/components/MateCard';
 import MapDisplay, { type Restaurant, type PlaceType, type MapPoint } from '@/components/MapDisplay';
-import { User } from '@/types/user';
-import type { CreateTripRequest, CreateTripResponse } from '@/types/trip';
+import { User, UserEntrySchema } from '@/types/user';
+import type { CreateTripRequest, CreateTripResponse, TripTheme } from '@/types/trip';
 import { calculateMidpoint, getDefaultRadiusKm, haversineDistanceKm, type Coordinate } from '@/lib/midpoint';
 
 type UserEntry = User & {
   isPreConfigured: boolean;
   userLabel: string; // e.g., "User 1", "User 2"
+  isReadOnly: boolean; // Whether the user can be edited
 };
 
 export default function Home() {
@@ -19,6 +21,7 @@ export default function Home() {
   const [users, setUsers] = useState<UserEntry[]>([]);
   const [manualUserCount, setManualUserCount] = useState(0);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isManualMateModalOpen, setIsManualMateModalOpen] = useState(false);
   const [isCreatingTrip, setIsCreatingTrip] = useState(false);
   const [showMap, setShowMap] = useState(true);
   const [radiusKm, setRadiusKm] = useState(50);
@@ -28,6 +31,8 @@ export default function Home() {
   const [enrichmentError, setEnrichmentError] = useState<string | null>(null);
   const [placeTypes, setPlaceTypes] = useState<PlaceType[]>(['restaurant']);
   const lastEnrichedKeyRef = useRef<string | null>(null);
+  const [themes, setThemes] = useState<TripTheme[]>([]);
+  const [selectedThemeId, setSelectedThemeId] = useState<string | null>(null);
 
   const togglePlaceType = (type: PlaceType) => {
     setPlaceTypes((prev) =>
@@ -73,6 +78,19 @@ export default function Home() {
       setRadiusKm(getDefaultRadiusKm(midpoint, coordinatesForRadius));
     }
   }, [midpoint?.lat, midpoint?.lon, coordinatesForRadius.length, usersKey]);
+
+  // Fetch trip themes on component mount
+  useEffect(() => {
+    fetch('/api/trip-themes')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data.themes) && data.themes.length > 0) {
+          setThemes(data.themes);
+          // Do not set a default - user must select
+        }
+      })
+      .catch(err => console.error('Error fetching themes:', err));
+  }, []);
 
   // Fetch places for each selected type in parallel; merge, tag with type, sort by distance
   useEffect(() => {
@@ -151,22 +169,6 @@ export default function Home() {
     };
   }, [midpoint?.lat, midpoint?.lon, radiusKm, places, placesLoading]);
 
-  const handleAddressSelect = (userId: string, address: AddressSuggestion) => {
-    setUsers((prev) => {
-      return prev.map((user) => {
-        if (user.id === userId) {
-          return {
-            ...user,
-            address: address.display_name,
-            lat: address.lat,
-            lon: address.lon,
-          };
-        }
-        return user;
-      });
-    });
-  };
-
   const handleRemoveUser = (userId: string) => {
     setUsers((prev) => prev.filter((u) => u.id !== userId));
     // If it's a manual user, decrement the counter
@@ -176,27 +178,17 @@ export default function Home() {
     }
   };
 
-  const handleNameChange = (userId: string, name: string) => {
-    setUsers((prev) => {
-      return prev.map((user) => {
-        if (user.id === userId) {
-          return { ...user, name };
-        }
-        return user;
-      });
-    });
-  };
-
-  const handleAddManualUser = () => {
+  const handleAddManualMate = (mate: { name: string; address: string; lat: number; lon: number }) => {
     const newCount = manualUserCount + 1;
     const newUser: UserEntry = {
       id: `manual-${Date.now()}`,
-      name: '',
-      address: '',
-      lat: 0,
-      lon: 0,
+      name: mate.name,
+      address: mate.address,
+      lat: mate.lat,
+      lon: mate.lon,
       isPreConfigured: false,
       userLabel: `User ${users.length + 1}`,
+      isReadOnly: true, // Manual mates added via modal are read-only
     };
     setUsers((prev) => [...prev, newUser]);
     setManualUserCount(newCount);
@@ -207,24 +199,35 @@ export default function Home() {
       ...user,
       isPreConfigured: true,
       userLabel: `User ${users.length + index + 1}`,
+      isReadOnly: true, // Pre-configured users are read-only
     }));
     setUsers((prev) => [...prev, ...newUserEntries]);
   };
 
   const handleCreateTrip = async () => {
-    if (users.length < 2) {
+    // Validate that we have at least 2 users with complete information
+    const validUsers = users.filter(user => UserEntrySchema.safeParse(user).success);
+    
+    if (validUsers.length < 2) {
+      alert('Please add at least two mates with complete information (name and address)');
+      return;
+    }
+
+    // Validate that a theme is selected
+    if (!selectedThemeId) {
+      alert('Please select a trip theme');
       return;
     }
 
     setIsCreatingTrip(true);
 
     try {
-      // Separate pre-configured and manual users
-      const preConfiguredUserIds = users
+      // Separate pre-configured and manual users (use validUsers only)
+      const preConfiguredUserIds = validUsers
         .filter((u) => u.isPreConfigured)
         .map((u) => u.id);
 
-      const manualUsers = users
+      const manualUsers = validUsers
         .filter((u) => !u.isPreConfigured)
         .map((u) => ({
           name: u.name,
@@ -237,6 +240,7 @@ export default function Home() {
       const requestBody: CreateTripRequest = {
         preConfiguredUserIds,
         manualUsers,
+        themeId: selectedThemeId,
       };
 
       const response = await fetch('/api/trips', {
@@ -266,7 +270,15 @@ export default function Home() {
     .filter(u => u.isPreConfigured)
     .map(u => u.id);
 
-  const canCalculate = users.length >= 2;
+  // Filter users with complete and valid information using Zod validation
+  const completeUsers = useMemo(() => {
+    return users.filter(user => {
+      const result = UserEntrySchema.safeParse(user);
+      return result.success;
+    });
+  }, [users]);
+
+  const canCalculate = completeUsers.length >= 2;
 
   return (
     <main className="min-h-screen bg-gray-50 py-8 px-4">
@@ -298,18 +310,12 @@ export default function Home() {
                   </div>
                 ) : (
                   users.map((user, index) => (
-                    <AddressInput
+                    <MateCard
                       key={user.id}
-                      userLabel={user.userLabel}
                       userNumber={index + 1}
                       userName={user.name}
                       userAddress={user.address}
-                      onAddressSelect={(address) =>
-                        handleAddressSelect(user.id, address)
-                      }
-                      onNameChange={(name) => handleNameChange(user.id, name)}
                       onRemove={() => handleRemoveUser(user.id)}
-                      isReadOnly={user.isPreConfigured}
                     />
                   ))
                 )}
@@ -323,7 +329,7 @@ export default function Home() {
                     Choose from Existing Mates
                   </button>
                   <button
-                    onClick={handleAddManualUser}
+                    onClick={() => setIsManualMateModalOpen(true)}
                     className="flex-1 py-2 px-4 border-2 border-dashed border-gray-300 rounded-md text-gray-600 hover:border-blue-500 hover:text-blue-600 transition-colors"
                   >
                     + Add Mate Manually
@@ -331,9 +337,35 @@ export default function Home() {
                 </div>
               </div>
 
+              {/* Theme Selection Dropdown */}
+              <div className="mt-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Trip Theme
+                </label>
+                <select
+                  value={selectedThemeId || ''}
+                  onChange={(e) => setSelectedThemeId(e.target.value || null)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  disabled={themes.length === 0}
+                >
+                  {themes.length === 0 ? (
+                    <option value="">Loading themes...</option>
+                  ) : (
+                    <>
+                      <option value="">Select a theme...</option>
+                      {themes.map((theme) => (
+                        <option key={theme.id} value={theme.id}>
+                          {theme.icon} {theme.name}
+                        </option>
+                      ))}
+                    </>
+                  )}
+                </select>
+              </div>
+
               {/* Create Trip Button */}
               <div className="mt-6">
-                {canCalculate ? (
+                {canCalculate && selectedThemeId ? (
                   <button
                     onClick={handleCreateTrip}
                     disabled={isCreatingTrip}
@@ -351,7 +383,13 @@ export default function Home() {
                 ) : (
                   <div className="p-4 bg-yellow-50 rounded-md border border-yellow-200">
                     <div className="text-sm text-yellow-800">
-                      Add at least two mates
+                      {!selectedThemeId
+                        ? 'Please select a trip theme'
+                        : users.length === 0
+                        ? 'Add at least two mates'
+                        : completeUsers.length === 0
+                        ? 'Please complete the information for your mates (name and address)'
+                        : `Add ${2 - completeUsers.length} more mate(s) with complete information`}
                     </div>
                   </div>
                 )}
@@ -366,6 +404,13 @@ export default function Home() {
         onClose={() => setIsModalOpen(false)}
         onSelectUsers={handleSelectPreConfiguredUsers}
         alreadySelectedUserIds={alreadySelectedUserIds}
+      />
+
+      {/* Add Manual Mate Modal */}
+      <AddManualMateModal
+        isOpen={isManualMateModalOpen}
+        onClose={() => setIsManualMateModalOpen(false)}
+        onAddMate={handleAddManualMate}
       />
     </main>
   );

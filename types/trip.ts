@@ -1,3 +1,10 @@
+// Trip theme data
+export interface TripTheme {
+  id: string;
+  name: string;
+  icon: string;
+}
+
 // API Request type for creating a trip
 export interface CreateTripRequest {
   preConfiguredUserIds: string[];
@@ -7,6 +14,7 @@ export interface CreateTripRequest {
     lat: number;
     lon: number;
   }>;
+  themeId: string;
 }
 
 // API Response type
@@ -29,4 +37,5 @@ export interface Trip {
   id: string;
   createdAt: string;
   users: TripUser[];
+  themeId?: string;
 }
