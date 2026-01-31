@@ -30,14 +30,26 @@ export default function AddressInput({
   onRemove,
   isReadOnly = false,
 }: AddressInputProps) {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(userAddress || '');
   const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [selectedAddress, setSelectedAddress] = useState<AddressSuggestion | null>(null);
+  const [selectedAddress, setSelectedAddress] = useState<AddressSuggestion | null>(
+    userAddress ? { display_name: userAddress, lat: 0, lon: 0, place_id: 0 } : null
+  );
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
+  const prevUserAddressRef = useRef(userAddress);
+
+  // Update query and selectedAddress when userAddress prop changes
+  useEffect(() => {
+    if (userAddress && userAddress !== prevUserAddressRef.current) {
+      setQuery(userAddress);
+      setSelectedAddress({ display_name: userAddress, lat: 0, lon: 0, place_id: 0 });
+      prevUserAddressRef.current = userAddress;
+    }
+  }, [userAddress]);
 
   // Debounced search
   useEffect(() => {

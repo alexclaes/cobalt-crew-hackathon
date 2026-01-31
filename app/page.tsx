@@ -4,6 +4,7 @@ import { useState, useRef, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import AddressInput, { AddressSuggestion } from '@/components/AddressInput';
 import UserSelectionModal from '@/components/UserSelectionModal';
+import AddManualMateModal from '@/components/AddManualMateModal';
 import MapDisplay, { type Restaurant, type PlaceType, type MapPoint } from '@/components/MapDisplay';
 import { User, UserEntrySchema } from '@/types/user';
 import type { CreateTripRequest, CreateTripResponse, TripTheme } from '@/types/trip';
@@ -12,6 +13,7 @@ import { calculateMidpoint, getDefaultRadiusKm, haversineDistanceKm, type Coordi
 type UserEntry = User & {
   isPreConfigured: boolean;
   userLabel: string; // e.g., "User 1", "User 2"
+  isReadOnly: boolean; // Whether the user can be edited
 };
 
 export default function Home() {
@@ -19,6 +21,7 @@ export default function Home() {
   const [users, setUsers] = useState<UserEntry[]>([]);
   const [manualUserCount, setManualUserCount] = useState(0);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isManualMateModalOpen, setIsManualMateModalOpen] = useState(false);
   const [isCreatingTrip, setIsCreatingTrip] = useState(false);
   const [showMap, setShowMap] = useState(true);
   const [radiusKm, setRadiusKm] = useState(50);
@@ -202,16 +205,17 @@ export default function Home() {
     });
   };
 
-  const handleAddManualUser = () => {
+  const handleAddManualMate = (mate: { name: string; address: string; lat: number; lon: number }) => {
     const newCount = manualUserCount + 1;
     const newUser: UserEntry = {
       id: `manual-${Date.now()}`,
-      name: '',
-      address: '',
-      lat: 0,
-      lon: 0,
+      name: mate.name,
+      address: mate.address,
+      lat: mate.lat,
+      lon: mate.lon,
       isPreConfigured: false,
       userLabel: `User ${users.length + 1}`,
+      isReadOnly: true, // Manual mates added via modal are read-only
     };
     setUsers((prev) => [...prev, newUser]);
     setManualUserCount(newCount);
@@ -222,6 +226,7 @@ export default function Home() {
       ...user,
       isPreConfigured: true,
       userLabel: `User ${users.length + index + 1}`,
+      isReadOnly: true, // Pre-configured users are read-only
     }));
     setUsers((prev) => [...prev, ...newUserEntries]);
   };
@@ -343,7 +348,7 @@ export default function Home() {
                       }
                       onNameChange={(name) => handleNameChange(user.id, name)}
                       onRemove={() => handleRemoveUser(user.id)}
-                      isReadOnly={user.isPreConfigured}
+                      isReadOnly={user.isReadOnly}
                     />
                   ))
                 )}
@@ -357,7 +362,7 @@ export default function Home() {
                     Choose from Existing Mates
                   </button>
                   <button
-                    onClick={handleAddManualUser}
+                    onClick={() => setIsManualMateModalOpen(true)}
                     className="flex-1 py-2 px-4 border-2 border-dashed border-gray-300 rounded-md text-gray-600 hover:border-blue-500 hover:text-blue-600 transition-colors"
                   >
                     + Add Mate Manually
@@ -430,6 +435,13 @@ export default function Home() {
         onClose={() => setIsModalOpen(false)}
         onSelectUsers={handleSelectPreConfiguredUsers}
         alreadySelectedUserIds={alreadySelectedUserIds}
+      />
+
+      {/* Add Manual Mate Modal */}
+      <AddManualMateModal
+        isOpen={isManualMateModalOpen}
+        onClose={() => setIsManualMateModalOpen(false)}
+        onAddMate={handleAddManualMate}
       />
     </main>
   );
