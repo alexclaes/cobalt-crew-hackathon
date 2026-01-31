@@ -77,7 +77,7 @@ export default function Home() {
   const handleCreateTrip = async () => {
     // Validate that we have at least 2 users with complete information
     const validUsers = users.filter(user => UserEntrySchema.safeParse(user).success);
-    
+
     if (validUsers.length < 2) {
       alert('Please add at least two mates with complete information (name and address)');
       return;
@@ -158,13 +158,13 @@ export default function Home() {
       const newMates: UserEntry[] = [];
       const skippedMates: string[] = [];
       const notFoundMates: string[] = [];
-      
+
       for (const mate of bulkResult.mates) {
         // Check if mate is already in the current users list
         const alreadyAdded = users.find(
           u => u.name.toLowerCase() === mate.name.toLowerCase()
         );
-        
+
         if (alreadyAdded) {
           console.log(`[Voice] Mate "${mate.name}" is already added, skipping`);
           skippedMates.push(mate.name);
@@ -189,7 +189,7 @@ export default function Home() {
           // Not found in pre-configured list
           // Check if address is just the name (meaning no location was provided)
           const hasLocation = mate.address.toLowerCase() !== mate.name.toLowerCase();
-          
+
           if (!hasLocation) {
             // No location provided and not in pre-configured list
             console.warn(`[Voice] No location provided for: ${mate.name}`);
@@ -202,10 +202,10 @@ export default function Home() {
                 const geocodeData = await geocodeResponse.json();
                 if (geocodeData.results && geocodeData.results.length > 0) {
                   const firstResult = geocodeData.results[0];
-                  
+
                   // Generate unique ID for manual mate
                   const mateId = `manual-voice-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-                  
+
                   newMates.push({
                     id: mateId,
                     name: mate.name,
@@ -216,7 +216,7 @@ export default function Home() {
                     userLabel: `User ${users.length + newMates.length + 1}`,
                     isReadOnly: true,
                   });
-                  
+
                   console.log(`[Voice] Successfully added mate via geocoding: ${mate.name} at ${firstResult.display_name}`);
                 } else {
                   console.warn(`[Voice] No geocoding results for: ${mate.address}`);
@@ -239,25 +239,25 @@ export default function Home() {
         setUsers(prev => [...prev, ...newMates]);
         console.log(`[Voice] Successfully added ${newMates.length} mate(s)`);
       }
-      
+
       // Only show alert if there are errors (skipped or not found mates)
       const hasErrors = skippedMates.length > 0 || notFoundMates.length > 0;
-      
+
       if (hasErrors) {
         let errorMessage = '';
-        
+
         if (skippedMates.length > 0) {
           errorMessage += `⚠️ Already added (skipped): ${skippedMates.join(', ')}\n\n`;
         }
-        
+
         if (notFoundMates.length > 0) {
           errorMessage += `❌ Could not find:\n${notFoundMates.map(name => `• ${name}`).join('\n')}\n\n`;
           errorMessage += `After pressing OK, voice recording will start automatically.\nPlease provide the missing locations or add them manually later.`;
         }
-        
+
         // Show alert and wait for user to dismiss
         alert(errorMessage);
-        
+
         // After dismissing alert, trigger voice input again if there are mates that need location
         if (notFoundMates.length > 0) {
           // Small delay to ensure alert is fully dismissed
@@ -273,7 +273,7 @@ export default function Home() {
         const matchingTheme = themes.find(
           theme => theme.name.toLowerCase() === bulkResult.theme!.toLowerCase()
         );
-        
+
         if (matchingTheme) {
           setSelectedThemeId(matchingTheme.id);
           console.log(`[Voice] Selected theme: ${matchingTheme.name}`);
@@ -308,43 +308,30 @@ export default function Home() {
       <div className="max-w-6xl mx-auto">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-2">
-            Plan a Weekend Trip
+            MidWay
           </h1>
           <p className="text-gray-600 mb-6">
-            Add addresses for each participant to find the perfect meeting point
+            Automagically plan a trip with your mates
           </p>
-          
+
           {/* Quick Start with Voice */}
           <div className="mb-6 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border-2 border-blue-200">
             <div className="flex flex-col items-center gap-3">
-              <div className="text-center">
-                <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                  🎤 Quick Start with Voice
-                </h3>
-                <p className="text-sm text-gray-600 mb-4">
-                  Say everyone's name and location, plus trip theme!
-                </p>
-                <p className="text-xs text-gray-500 italic mb-3">
-                  Example: "Add Sarah, Michael from Munich, and Alex. I want a food and drink trip."
-                </p>
-                <p className="text-xs text-gray-500 mb-3">
-                  💡 Tip: If a mate is already in the system, just say their name. Otherwise, include their location.
-                </p>
-              </div>
-              
               <VoiceInput
                 context="bulk"
                 availableThemes={themes.map(t => t.name)}
                 onResult={handleVoiceResult}
                 onError={handleVoiceError}
-                buttonText="🎙️ Start Voice Input"
+                buttonText="Quick Start with Voice"
                 buttonClassName="px-8 py-4 rounded-xl font-semibold text-lg shadow-lg"
                 triggerRecording={triggerVoiceInput}
               />
-              
-              <p className="text-xs text-gray-500 mt-2">
-                Works best in Chrome or Edge • Microphone permission required
-              </p>
+
+              <div className="text-center">
+                <p className="text-xs text-gray-500 italic mb-3">
+                  Example: "Add Sarah, Michael from Munich, and Alex. I want a food and drink trip."
+                </p>
+              </div>
             </div>
           </div>
         </div>
@@ -352,105 +339,105 @@ export default function Home() {
         {/* Single Column: Address Inputs */}
         <div className="max-w-2xl mx-auto">
           <div className="bg-white rounded-lg shadow-md p-6">
-              <h2 className="text-xl font-semibold text-gray-800 mb-4">
-                Add your Mates
-              </h2>
+            <h2 className="text-xl font-semibold text-gray-800 mb-4">
+              Your Mates
+            </h2>
 
-              <div className="space-y-4">
-                {/* Render address inputs for each user */}
-                {users.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    <p className="mb-4">No mates added yet</p>
-                    <p className="text-sm">
-                      Choose from existing mates or add a mate manually to get started
-                    </p>
-                  </div>
-                ) : (
-                  users.map((user, index) => (
-                    <MateCard
-                      key={user.id}
-                      userNumber={index + 1}
-                      userName={user.name}
-                      userAddress={user.address}
-                      onRemove={() => handleRemoveUser(user.id)}
-                    />
-                  ))
-                )}
-
-                {/* Add user buttons */}
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setIsModalOpen(true)}
-                    className="flex-1 py-2 px-4 border-2 border-dashed border-gray-300 rounded-md text-gray-600 hover:border-blue-500 hover:text-blue-600 transition-colors"
-                  >
-                    Choose from Existing Mates
-                  </button>
-                  <button
-                    onClick={() => setIsManualMateModalOpen(true)}
-                    className="flex-1 py-2 px-4 border-2 border-dashed border-gray-300 rounded-md text-gray-600 hover:border-blue-500 hover:text-blue-600 transition-colors"
-                  >
-                    + Add Mate Manually
-                  </button>
+            <div className="space-y-4">
+              {/* Render address inputs for each user */}
+              {users.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <p className="mb-4">No mates added yet</p>
+                  <p className="text-sm">
+                    Choose from existing mates or add a mate manually to get started
+                  </p>
                 </div>
-              </div>
+              ) : (
+                users.map((user, index) => (
+                  <MateCard
+                    key={user.id}
+                    userNumber={index + 1}
+                    userName={user.name}
+                    userAddress={user.address}
+                    onRemove={() => handleRemoveUser(user.id)}
+                  />
+                ))
+              )}
 
-              {/* Theme Selection Dropdown */}
-              <div className="mt-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Trip Theme
-                </label>
-                <select
-                  value={selectedThemeId || ''}
-                  onChange={(e) => setSelectedThemeId(e.target.value || null)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  disabled={themes.length === 0}
+              {/* Add user buttons */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setIsModalOpen(true)}
+                  className="flex-1 py-2 px-4 border-2 border-dashed border-gray-300 rounded-md text-gray-600 hover:border-blue-500 hover:text-blue-600 transition-colors"
                 >
-                  {themes.length === 0 ? (
-                    <option value="">Loading themes...</option>
-                  ) : (
-                    <>
-                      <option value="">Select a theme...</option>
-                      {themes.map((theme) => (
-                        <option key={theme.id} value={theme.id}>
-                          {theme.icon} {theme.name}
-                        </option>
-                      ))}
-                    </>
-                  )}
-                </select>
+                  Choose mates from friends list
+                </button>
+                <button
+                  onClick={() => setIsManualMateModalOpen(true)}
+                  className="flex-1 py-2 px-4 border-2 border-dashed border-gray-300 rounded-md text-gray-600 hover:border-blue-500 hover:text-blue-600 transition-colors"
+                >
+                  + Add Mate Manually
+                </button>
               </div>
+            </div>
 
-              {/* Create Trip Button */}
-              <div className="mt-6">
-                {canCalculate && selectedThemeId ? (
-                  <button
-                    onClick={handleCreateTrip}
-                    disabled={isCreatingTrip}
-                    className="w-full py-3 px-4 bg-blue-600 text-white rounded-md font-medium hover:bg-blue-700 transition-colors shadow-md disabled:bg-gray-400 disabled:cursor-not-allowed"
-                  >
-                    {isCreatingTrip ? (
-                      <span className="flex items-center justify-center gap-2">
-                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                        Creating Trip...
-                      </span>
-                    ) : (
-                      'Plan your Trip'
-                    )}
-                  </button>
+            {/* Theme Selection Dropdown */}
+            <div className="mt-6">
+              <label className="block text-xl font-semibold text-gray-800 mb-4">
+                Trip Theme
+              </label>
+              <select
+                value={selectedThemeId || ''}
+                onChange={(e) => setSelectedThemeId(e.target.value || null)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                disabled={themes.length === 0}
+              >
+                {themes.length === 0 ? (
+                  <option value="">Loading themes...</option>
                 ) : (
-                  <div className="p-4 bg-yellow-50 rounded-md border border-yellow-200">
-                    <div className="text-sm text-yellow-800">
-                      {!selectedThemeId
-                        ? 'Please select a trip theme'
-                        : users.length === 0
+                  <>
+                    <option value="">Select a theme...</option>
+                    {themes.map((theme) => (
+                      <option key={theme.id} value={theme.id}>
+                        {theme.icon} {theme.name}
+                      </option>
+                    ))}
+                  </>
+                )}
+              </select>
+            </div>
+
+            {/* Create Trip Button */}
+            <div className="mt-6">
+              {canCalculate && selectedThemeId ? (
+                <button
+                  onClick={handleCreateTrip}
+                  disabled={isCreatingTrip}
+                  className="w-full py-3 px-4 bg-blue-600 text-white rounded-md font-medium hover:bg-blue-700 transition-colors shadow-md disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {isCreatingTrip ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      Creating Trip...
+                    </span>
+                  ) : (
+                    'Plan your Trip'
+                  )}
+                </button>
+              ) : (
+                <div className="p-4 bg-yellow-50 rounded-md border border-yellow-200">
+                  <div className="text-sm text-yellow-800">
+                    {!selectedThemeId
+                      ? 'Please select a trip theme'
+                      : users.length === 0
                         ? 'Add at least two mates'
                         : completeUsers.length === 0
-                        ? 'Please complete the information for your mates (name and address)'
-                        : `Add ${2 - completeUsers.length} more mate(s) with complete information`}
-                    </div>
+                          ? 'Please complete the information for your mates (name and address)'
+                          : `Add ${2 - completeUsers.length} more mate(s) with complete information`}
                   </div>
-                )}
-              </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
