@@ -150,7 +150,28 @@ export default function TripPage() {
     <main className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <div className="text-center mb-8">
+        <div className="relative text-center mb-8">
+          {/* New Trip Button - Top Left */}
+          <a
+            href="/"
+            className="absolute top-0 left-0 flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md font-medium hover:bg-gray-700 transition-colors shadow-md"
+          >
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 4v16m8-8H4"
+              />
+            </svg>
+            New Trip
+          </a>
+          
           <h1 className="text-4xl font-bold text-gray-900 mb-2">
             Trip Planning
           </h1>
@@ -160,6 +181,32 @@ export default function TripPage() {
           <div className="mt-2 text-sm text-gray-500">
             Trip ID: {trip.id}
           </div>
+          
+          {/* Share Button - Top Right */}
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(
+                `${window.location.origin}/trip/${trip.id}`
+              );
+              alert('Link copied to clipboard!');
+            }}
+            className="absolute top-0 right-0 flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md font-medium hover:bg-blue-700 transition-colors shadow-md"
+          >
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
+              />
+            </svg>
+            Share Trip
+          </button>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -222,32 +269,6 @@ export default function TripPage() {
           {/* Right Column: Mates List */}
           <div>
             <MatesList users={trip.users} />
-          </div>
-        </div>
-
-        {/* Share Link Section */}
-        <div className="mt-8 bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-xl font-semibold text-gray-800 mb-4">
-            Share this Trip
-          </h2>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              readOnly
-              value={`${window.location.origin}/trip/${trip.id}`}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-700"
-            />
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(
-                  `${window.location.origin}/trip/${trip.id}`
-                );
-                alert('Link copied to clipboard!');
-              }}
-              className="px-6 py-2 bg-blue-600 text-white rounded-md font-medium hover:bg-blue-700 transition-colors"
-            >
-              Copy Link
-            </button>
           </div>
         </div>
       </div>

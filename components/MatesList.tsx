@@ -27,43 +27,17 @@ export default function MatesList({ users }: MatesListProps) {
 
               {/* User Details */}
               <div className="flex-1 min-w-0">
-                <div className="mb-2">
-                  <label className="block text-xs font-medium text-gray-600 mb-1">
-                    Name
-                  </label>
-                  <div className="px-3 py-2 bg-white border border-gray-300 rounded-md text-gray-700">
+                <div className="mb-3">
+                  <div className="text-lg font-semibold text-gray-900">
                     {user.name}
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">
-                    Address
-                  </label>
-                  <div className="px-3 py-2 bg-white border border-gray-300 rounded-md text-gray-700 text-sm">
+                  <div className="text-sm text-gray-600 leading-relaxed">
                     {user.address}
                   </div>
                 </div>
-
-                {/* Optional: Show if pre-configured */}
-                {user.isPreConfigured && (
-                  <div className="mt-2 flex items-center gap-1 text-xs text-blue-600">
-                    <svg
-                      className="w-4 h-4"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M5 13l4 4L19 7"
-                      />
-                    </svg>
-                    <span>Pre-configured mate</span>
-                  </div>
-                )}
               </div>
             </div>
           ))}
