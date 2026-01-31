@@ -143,12 +143,10 @@ export async function POST(request: NextRequest) {
     }
 
     const enrichedList = Array.isArray(parsed.places) ? parsed.places : [];
-    console.log('[Enrich API] OpenAI response (enriched items):', JSON.stringify(enrichedList, null, 2));
     const merged = mergeEnriched(places, enrichedList);
     
     // Extract recommendation
     const recommendation = parsed.recommendation || { placeId: null };
-    console.log('[Enrich API] Recommendation:', JSON.stringify(recommendation, null, 2));
     
     return NextResponse.json({
       places: merged,

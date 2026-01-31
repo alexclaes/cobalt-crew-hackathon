@@ -20,19 +20,42 @@ export async function GET(
       );
     }
 
-    // Query database for trip with theme information
-    const result = await sql`
-      SELECT 
-        t.id, 
-        t.created_at, 
-        t.users,
-        t.theme_id,
-        tt.name as theme_name,
-        tt.icon as theme_icon
-      FROM trips t
-      LEFT JOIN trip_themes tt ON t.theme_id = tt.id
-      WHERE t.id = ${id}
-    `;
+    // Query database for trip with theme information (try with transport_mode; fallback if column missing)
+    let result: { id: string; created_at: string; users: unknown; theme_id: string | null; transport_mode?: string | null; theme_name: string | null; theme_icon: string | null }[];
+    try {
+      result = await sql`
+        SELECT 
+          t.id, 
+          t.created_at, 
+          t.users,
+          t.theme_id,
+          t.transport_mode,
+          tt.name as theme_name,
+          tt.icon as theme_icon
+        FROM trips t
+        LEFT JOIN trip_themes tt ON t.theme_id = tt.id
+        WHERE t.id = ${id}
+      `;
+    } catch (selectError: unknown) {
+      const err = selectError as { code?: string; message?: string };
+      const isMissingColumn = err?.code === '42703' || (typeof err?.message === 'string' && err.message.includes('transport_mode') && err.message.includes('does not exist'));
+      if (isMissingColumn) {
+        result = await sql`
+          SELECT 
+            t.id, 
+            t.created_at, 
+            t.users,
+            t.theme_id,
+            tt.name as theme_name,
+            tt.icon as theme_icon
+          FROM trips t
+          LEFT JOIN trip_themes tt ON t.theme_id = tt.id
+          WHERE t.id = ${id}
+        `;
+      } else {
+        throw selectError;
+      }
+    }
 
     if (result.length === 0) {
       return NextResponse.json(
@@ -42,16 +65,17 @@ export async function GET(
     }
 
     const row = result[0];
+    const theme =
+      row.theme_id != null && row.theme_name != null && row.theme_icon != null
+        ? { id: row.theme_id, name: row.theme_name, icon: row.theme_icon }
+        : undefined;
     const trip: Trip = {
       id: row.id,
       createdAt: row.created_at,
       users: row.users,
-      themeId: row.theme_id,
-      theme: row.theme_id ? {
-        id: row.theme_id,
-        name: row.theme_name,
-        icon: row.theme_icon,
-      } : undefined,
+      themeId: row.theme_id ?? undefined,
+      theme,
+      transportMode: row.transport_mode === 'car' || row.transport_mode === 'train' ? row.transport_mode : undefined,
     };
 
     return NextResponse.json(trip);

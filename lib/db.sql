@@ -26,8 +26,12 @@ CREATE TABLE IF NOT EXISTS trips (
   id UUID PRIMARY KEY,
   created_at TIMESTAMP DEFAULT NOW(),
   users JSONB NOT NULL,
-  theme_id UUID REFERENCES trip_themes(id)
+  theme_id UUID REFERENCES trip_themes(id),
+  transport_mode VARCHAR(20)
 );
+
+-- For existing DBs: run this once to add transport_mode (PostgreSQL)
+-- DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'trips' AND column_name = 'transport_mode') THEN ALTER TABLE trips ADD COLUMN transport_mode VARCHAR(20); END IF; END $$;
 
 -- Index for sorting trips by creation date
 CREATE INDEX IF NOT EXISTS idx_trips_created_at ON trips(created_at DESC);

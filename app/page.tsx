@@ -6,8 +6,8 @@ import UserSelectionModal from '@/components/UserSelectionModal';
 import AddManualMateModal from '@/components/AddManualMateModal';
 import MateCard from '@/components/MateCard';
 import MapDisplay, { type Restaurant, type PlaceType, type MapPoint } from '@/components/MapDisplay';
-import { User, UserEntrySchema } from '@/types/user';
-import type { CreateTripRequest, CreateTripResponse, TripTheme } from '@/types/trip';
+import { User, UserSchema } from '@/types/user';
+import type { CreateTripRequest, CreateTripResponse, TripTheme, TransportMode } from '@/types/trip';
 import { calculateMidpoint, getDefaultRadiusKm, haversineDistanceKm, type Coordinate } from '@/lib/midpoint';
 
 type UserEntry = User & {
@@ -33,6 +33,9 @@ export default function Home() {
   const lastEnrichedKeyRef = useRef<string | null>(null);
   const [themes, setThemes] = useState<TripTheme[]>([]);
   const [selectedThemeId, setSelectedThemeId] = useState<string | null>(null);
+  const [transportMode, setTransportMode] = useState<TransportMode>('geographic');
+  const [meetingPointLoading, setMeetingPointLoading] = useState(false);
+  const [apiMidpoint, setApiMidpoint] = useState<{ lat: number; lon: number } | null>(null);
 
   const togglePlaceType = (type: PlaceType) => {
     setPlaceTypes((prev) =>
@@ -45,8 +48,8 @@ export default function Home() {
     return users.map(u => `${u.id}:${u.lat.toFixed(6)},${u.lon.toFixed(6)}`).join('|');
   }, [users]);
 
-  // Calculate midpoint only when showMap is true - memoize to prevent object recreation
-  const midpoint = useMemo(() => {
+  // Geographic midpoint (used when transport is geographic, or as fallback while loading car/train)
+  const geographicMidpoint = useMemo(() => {
     if (!showMap || users.length < 2) {
       return null;
     }
@@ -54,10 +57,48 @@ export default function Home() {
       lat: user.lat,
       lon: user.lon,
     }));
-    const result = calculateMidpoint(coordinates);
-    // Return null if calculation failed, otherwise return the result
-    return result;
+    return calculateMidpoint(coordinates);
   }, [usersKey, showMap, users.length]);
+
+  // When car/train: fetch travel-time–fair meeting point from API
+  useEffect(() => {
+    if (transportMode === 'geographic' || users.length < 2) {
+      setApiMidpoint(null);
+      return;
+    }
+    let cancelled = false;
+    setMeetingPointLoading(true);
+    const coordinates = users.map((u) => ({ lat: u.lat, lon: u.lon }));
+    fetch('/api/meeting-point', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ coordinates, transport: transportMode }),
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error(res.statusText);
+        return res.json();
+      })
+      .then((data: { lat: number; lon: number }) => {
+        if (!cancelled) {
+          setApiMidpoint({ lat: data.lat, lon: data.lon });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setApiMidpoint(null);
+      })
+      .finally(() => {
+        if (!cancelled) setMeetingPointLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [usersKey, transportMode]);
+
+  // Display midpoint: geographic mode uses computed; car/train uses API result or geographic fallback
+  const midpoint =
+    transportMode === 'geographic'
+      ? geographicMidpoint
+      : apiMidpoint ?? geographicMidpoint;
 
   // Convert users to map points - use stable usersKey
   const mapPoints: MapPoint[] = useMemo(() => {
@@ -154,7 +195,6 @@ export default function Home() {
       })
       .then((enriched: Restaurant[]) => {
         if (!cancelled && Array.isArray(enriched)) {
-          console.log('[Enrich] data from API (merged places from OpenAI):', JSON.stringify(enriched, null, 2));
           setPlaces(enriched);
         }
       })
@@ -206,7 +246,7 @@ export default function Home() {
 
   const handleCreateTrip = async () => {
     // Validate that we have at least 2 users with complete information
-    const validUsers = users.filter(user => UserEntrySchema.safeParse(user).success);
+    const validUsers = users.filter(user => UserSchema.safeParse(user).success);
     
     if (validUsers.length < 2) {
       alert('Please add at least two mates with complete information (name and address)');
@@ -240,7 +280,8 @@ export default function Home() {
       const requestBody: CreateTripRequest = {
         preConfiguredUserIds,
         manualUsers,
-        themeId: selectedThemeId,
+        themeId: selectedThemeId!,
+        transportMode,
       };
 
       const response = await fetch('/api/trips', {
@@ -257,8 +298,8 @@ export default function Home() {
 
       const data: CreateTripResponse = await response.json();
 
-      // Navigate to the trip page with the server-generated ID
-      router.push(`/trip/${data.tripId}`);
+      // Navigate to the trip page with the server-generated ID and chosen transport (so map shows correct line even if DB didn't persist it)
+      router.push(`/trip/${data.tripId}?transportMode=${encodeURIComponent(transportMode)}`);
     } catch (error) {
       console.error('Error creating trip:', error);
       alert('Failed to create trip. Please try again.');
@@ -273,7 +314,7 @@ export default function Home() {
   // Filter users with complete and valid information using Zod validation
   const completeUsers = useMemo(() => {
     return users.filter(user => {
-      const result = UserEntrySchema.safeParse(user);
+      const result = UserSchema.safeParse(user);
       return result.success;
     });
   }, [users]);
@@ -335,6 +376,38 @@ export default function Home() {
                     + Add Mate Manually
                   </button>
                 </div>
+              </div>
+
+              {/* Meeting point by transport */}
+              <div className="mt-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Meeting point by
+                </label>
+                <div className="flex gap-4 flex-wrap">
+                  <label className="inline-flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="transport"
+                      checked={transportMode === 'geographic'}
+                      onChange={() => setTransportMode('geographic')}
+                      className="text-blue-600 focus:ring-blue-500"
+                    />
+                    <span>Geographic (centre)</span>
+                  </label>
+                  <label className="inline-flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="transport"
+                      checked={transportMode === 'car'}
+                      onChange={() => setTransportMode('car')}
+                      className="text-blue-600 focus:ring-blue-500"
+                    />
+                    <span>Car</span>
+                  </label>
+                </div>
+                {transportMode !== 'geographic' && users.length >= 2 && meetingPointLoading && (
+                  <p className="text-sm text-gray-500 mt-1">Calculating fair meeting point…</p>
+                )}
               </div>
 
               {/* Theme Selection Dropdown */}

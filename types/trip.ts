@@ -5,6 +5,9 @@ export interface TripTheme {
   icon: string;
 }
 
+// Transport mode for meeting point (geographic centre vs car/train travel-time fair)
+export type TransportMode = 'geographic' | 'car' | 'train';
+
 // API Request type for creating a trip
 export interface CreateTripRequest {
   preConfiguredUserIds: string[];
@@ -15,6 +18,7 @@ export interface CreateTripRequest {
     lon: number;
   }>;
   themeId: string;
+  transportMode?: TransportMode;
 }
 
 // API Response type
@@ -39,4 +43,5 @@ export interface Trip {
   users: TripUser[];
   themeId?: string;
   theme?: TripTheme;
+  transportMode?: TransportMode;
 }

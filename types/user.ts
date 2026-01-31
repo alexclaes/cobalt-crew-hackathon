@@ -21,4 +21,5 @@ export const UserSchema = z.object({
 export const UserEntrySchema = UserSchema.extend({
   isPreConfigured: z.boolean(),
   userLabel: z.string(),
+  isReadOnly: z.boolean().optional(),
 });

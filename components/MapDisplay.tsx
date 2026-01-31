@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useMemo, memo } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Tooltip, Circle, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Tooltip, Circle, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 
 export interface MapPoint {
@@ -27,6 +27,13 @@ export interface Restaurant {
   vegetarianOptions?: 'yes' | 'no' | 'unknown';
 }
 
+/** Optional midpoints by mode for drawing 3 lines (center, car, train) in different colors */
+export interface MidpointsByMode {
+  geographic?: { lat: number; lon: number };
+  car?: { lat: number; lon: number };
+  train?: { lat: number; lon: number };
+}
+
 interface MapDisplayProps {
   startpoints: MapPoint[];
   midpoint: { lat: number; lon: number } | null;
@@ -34,6 +41,14 @@ interface MapDisplayProps {
   radiusKm?: number;
   /** Places within radius (from Overpass API), each with type for marker color. */
   restaurants?: Restaurant[];
+  /** Optional: draw lines from each startpoint to center/car/train midpoints in different colors */
+  midpointsByMode?: MidpointsByMode;
+  /** Which lines to show when midpointsByMode is set (default all true). */
+  showGeographicLine?: boolean;
+  showCarLine?: boolean;
+  showTrainLine?: boolean;
+  /** Actual driving route polylines (start → car midpoint) for each startpoint. [lat, lon][] per route. */
+  carRoutePolylines?: Array<Array<[number, number]>>;
 }
 
 const PLACE_TYPE_LABELS: Record<PlaceType, string> = {
@@ -180,7 +195,205 @@ function FitBoundsToRadius({
 
 const DEFAULT_RADIUS_KM = 50;
 
-function MapDisplay({ startpoints, midpoint, radiusKm = DEFAULT_RADIUS_KM, restaurants = [] }: MapDisplayProps) {
+// Line colors for center (geographic), car, train
+const LINE_COLORS = {
+  geographic: '#2563eb',
+  car: '#16a34a',
+  train: '#7c3aed',
+} as const;
+
+// Wrapper that only renders layers once the map context is ready (fixes appendChild undefined in react-leaflet)
+interface MapContentProps {
+  startpoints: MapPoint[];
+  midpoint: { lat: number; lon: number } | null;
+  radiusKm: number;
+  restaurants: Restaurant[];
+  allPoints: Array<{ lat: number; lon: number }>;
+  restaurantPoints: Array<{ lat: number; lon: number }>;
+  midpointsByMode?: MidpointsByMode;
+  showGeographicLine?: boolean;
+  showCarLine?: boolean;
+  showTrainLine?: boolean;
+  carRoutePolylines?: Array<Array<[number, number]>>;
+}
+function MapContent({ startpoints, midpoint, radiusKm, restaurants, allPoints, restaurantPoints, midpointsByMode, showGeographicLine = true, showCarLine = true, showTrainLine = true, carRoutePolylines }: MapContentProps) {
+  const map = useMap();
+  const [layersReady, setLayersReady] = useState(false);
+  // Defer layers until next tick so map container/panes are in the DOM (fixes appendChild undefined)
+  useEffect(() => {
+    if (!map) return;
+    const t = requestAnimationFrame(() => {
+      setLayersReady(true);
+    });
+    return () => cancelAnimationFrame(t);
+  }, [map]);
+  if (!map || !layersReady) {
+    return null;
+  }
+  return (
+    <>
+      <TileLayer
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+      />
+
+      {/* Startpoint markers */}
+      {startpoints.map((point, index) => (
+        <Marker
+          key={`startpoint-${index}`}
+          position={[point.lat, point.lon]}
+          icon={getDefaultIcon()}
+        >
+          <Tooltip permanent direction="top" offset={[0, -40]}>
+            <div className="font-medium">{point.label}</div>
+          </Tooltip>
+          <Popup>
+            <div className="font-medium">{point.label}</div>
+            <div className="text-sm text-gray-600">Start Point</div>
+          </Popup>
+        </Marker>
+      ))}
+
+      {/* Lines from each startpoint to center / car / train midpoints (different colors) */}
+      {midpointsByMode && startpoints.length >= 2 && (
+        <>
+          {showGeographicLine && midpointsByMode.geographic && startpoints.map((point, i) => (
+            <Polyline
+              key={`line-geographic-${i}`}
+              positions={[[point.lat, point.lon], [midpointsByMode.geographic!.lat, midpointsByMode.geographic!.lon]]}
+              pathOptions={{ color: LINE_COLORS.geographic, weight: 3, opacity: 0.8 }}
+            />
+          ))}
+          {showCarLine && midpointsByMode.car && (
+            carRoutePolylines && carRoutePolylines.length > 0
+              ? carRoutePolylines.map((positions, i) => (
+                  <Polyline
+                    key={`route-car-${i}`}
+                    positions={positions}
+                    pathOptions={{ color: LINE_COLORS.car, weight: 4, opacity: 0.9 }}
+                  />
+                ))
+              : startpoints.map((point, i) => (
+                  <Polyline
+                    key={`line-car-${i}`}
+                    positions={[[point.lat, point.lon], [midpointsByMode.car!.lat, midpointsByMode.car!.lon]]}
+                    pathOptions={{ color: LINE_COLORS.car, weight: 3, opacity: 0.8 }}
+                  />
+                ))
+          )}
+          {showTrainLine && midpointsByMode.train && startpoints.map((point, i) => (
+            <Polyline
+              key={`line-train-${i}`}
+              positions={[[point.lat, point.lon], [midpointsByMode.train!.lat, midpointsByMode.train!.lon]]}
+              pathOptions={{ color: LINE_COLORS.train, weight: 4, opacity: 0.9, dashArray: '8, 8' }}
+            />
+          ))}
+        </>
+      )}
+
+      {/* Search radius circle around midpoint (50 km default, adjustable later) */}
+      {midpoint && (
+        <Circle
+          center={[midpoint.lat, midpoint.lon]}
+          radius={radiusKm * 1000}
+          pathOptions={{
+            color: '#2563eb',
+            fillColor: '#3b82f6',
+            fillOpacity: 0.15,
+            weight: 2,
+          }}
+        />
+      )}
+
+      {/* Midpoint marker */}
+      {midpoint && (
+        <Marker
+          position={[midpoint.lat, midpoint.lon]}
+          icon={getMidpointIcon()}
+        >
+          <Tooltip permanent direction="top" offset={[0, -50]}>
+            <div className="font-bold text-blue-600">Midpoint</div>
+          </Tooltip>
+          <Popup>
+            <div className="font-bold text-blue-600">Midpoint</div>
+            <div className="text-sm text-gray-600">
+              Geographic center of all start points
+            </div>
+            <div className="text-sm text-gray-500 mt-1">
+              Search radius: {radiusKm} km
+            </div>
+          </Popup>
+        </Marker>
+      )}
+
+      {/* Place markers (color by type): restaurants, bars, hotels */}
+      {restaurants.filter((r) => r.type).map((r) => (
+        <Marker
+          key={`${r.id}-${r.type}`}
+          position={[r.lat, r.lon]}
+          icon={getPlaceIcon(r.type)}
+          eventHandlers={{
+            click: () => {
+              try {
+                console.log('[Enriched data] place clicked:', JSON.stringify(r, null, 2));
+              } catch (_) {}
+            },
+          }}
+        >
+          <Popup>
+            <div className="text-xs font-medium text-blue-600 uppercase tracking-wide">
+              {PLACE_TYPE_LABELS[r.type]}
+            </div>
+            <div className="font-medium text-gray-900">{r.name}</div>
+            {r.cuisine && (
+              <div className="text-sm text-gray-600">Cuisine / style: {r.cuisine}</div>
+            )}
+            <div className="text-sm text-gray-600">Price range: {r.priceRange ?? '—'}</div>
+            {r.rating != null && r.rating !== 'unknown' && ratingToStars(r.rating) && (
+              <div className="text-sm text-gray-600">
+                Rating: <span className="text-amber-500">{ratingToStars(r.rating)}</span>
+                {typeof r.rating === 'number' || (typeof r.rating === 'string' && !Number.isNaN(parseFloat(r.rating))) ? (
+                  <span className="ml-1 text-gray-500">({r.rating})</span>
+                ) : null}
+              </div>
+            )}
+            {r.veganOptions && (
+              <div className="text-sm text-gray-600">Vegan options: {r.veganOptions}</div>
+            )}
+            {r.vegetarianOptions && (
+              <div className="text-sm text-gray-600">Vegetarian options: {r.vegetarianOptions}</div>
+            )}
+            {r.openingHours && (
+              <div className="text-xs text-gray-500 mt-1">{r.openingHours}</div>
+            )}
+            <div className="mt-2 pt-2 border-t border-gray-200">
+              <a
+                href={`https://www.google.com/maps?q=${r.lat},${r.lon}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1"
+              >
+                View on Google Maps
+              </a>
+            </div>
+          </Popup>
+        </Marker>
+      ))}
+
+      {/* Zoom to radius view when midpoint + radius set; otherwise fit all points */}
+      {midpoint && (
+        <FitBoundsToRadius
+          midpoint={midpoint}
+          radiusKm={radiusKm}
+          restaurantPoints={restaurantPoints.length > 0 ? restaurantPoints : undefined}
+        />
+      )}
+      {!midpoint && allPoints.length > 0 && <FitBounds points={allPoints} />}
+    </>
+  );
+}
+
+function MapDisplay({ startpoints, midpoint, radiusKm = DEFAULT_RADIUS_KM, restaurants = [], midpointsByMode, showGeographicLine = true, showCarLine = true, showTrainLine = true, carRoutePolylines }: MapDisplayProps) {
   const [isMounted, setIsMounted] = useState(false);
   const mapRef = useRef<L.Map | null>(null);
   const containerKeyRef = useRef(Math.random().toString(36).substring(7));
@@ -246,126 +459,19 @@ function MapDisplay({ startpoints, midpoint, radiusKm = DEFAULT_RADIUS_KM, resta
         zoom={defaultZoom}
         style={{ height: '100%', width: '100%' }}
       >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        <MapContent
+          startpoints={startpoints}
+          midpoint={midpoint}
+          radiusKm={radiusKm}
+          restaurants={restaurants}
+          allPoints={allPoints}
+          restaurantPoints={restaurantPoints}
+          midpointsByMode={midpointsByMode}
+          showGeographicLine={showGeographicLine}
+          showCarLine={showCarLine}
+          showTrainLine={showTrainLine}
+          carRoutePolylines={carRoutePolylines}
         />
-
-        {/* Startpoint markers */}
-        {startpoints.map((point, index) => (
-          <Marker
-            key={`startpoint-${index}`}
-            position={[point.lat, point.lon]}
-            icon={getDefaultIcon()}
-          >
-            <Tooltip permanent direction="top" offset={[0, -40]}>
-              <div className="font-medium">{point.label}</div>
-            </Tooltip>
-            <Popup>
-              <div className="font-medium">{point.label}</div>
-              <div className="text-sm text-gray-600">Start Point</div>
-            </Popup>
-          </Marker>
-        ))}
-
-        {/* Search radius circle around midpoint (50 km default, adjustable later) */}
-        {midpoint && (
-          <Circle
-            center={[midpoint.lat, midpoint.lon]}
-            radius={radiusKm * 1000}
-            pathOptions={{
-              color: '#2563eb',
-              fillColor: '#3b82f6',
-              fillOpacity: 0.15,
-              weight: 2,
-            }}
-          />
-        )}
-
-        {/* Midpoint marker */}
-        {midpoint && (
-          <Marker
-            position={[midpoint.lat, midpoint.lon]}
-            icon={getMidpointIcon()}
-          >
-            <Tooltip permanent direction="top" offset={[0, -50]}>
-              <div className="font-bold text-blue-600">Midpoint</div>
-            </Tooltip>
-            <Popup>
-              <div className="font-bold text-blue-600">Midpoint</div>
-              <div className="text-sm text-gray-600">
-                Geographic center of all start points
-              </div>
-              <div className="text-sm text-gray-500 mt-1">
-                Search radius: {radiusKm} km
-              </div>
-            </Popup>
-          </Marker>
-        )}
-
-        {/* Place markers (color by type): restaurants, bars, hotels */}
-        {restaurants.filter((r) => r.type).map((r) => (
-          <Marker
-            key={`${r.id}-${r.type}`}
-            position={[r.lat, r.lon]}
-            icon={getPlaceIcon(r.type)}
-            eventHandlers={{
-              click: () => {
-                try {
-                  console.log('[Enriched data] place clicked:', JSON.stringify(r, null, 2));
-                } catch (_) {}
-              },
-            }}
-          >
-            <Popup>
-              <div className="text-xs font-medium text-blue-600 uppercase tracking-wide">
-                {PLACE_TYPE_LABELS[r.type]}
-              </div>
-              <div className="font-medium text-gray-900">{r.name}</div>
-              {r.cuisine && (
-                <div className="text-sm text-gray-600">Cuisine / style: {r.cuisine}</div>
-              )}
-              <div className="text-sm text-gray-600">Price range: {r.priceRange ?? '—'}</div>
-              {r.rating != null && r.rating !== 'unknown' && ratingToStars(r.rating) && (
-                <div className="text-sm text-gray-600">
-                  Rating: <span className="text-amber-500">{ratingToStars(r.rating)}</span>
-                  {typeof r.rating === 'number' || (typeof r.rating === 'string' && !Number.isNaN(parseFloat(r.rating))) ? (
-                    <span className="ml-1 text-gray-500">({r.rating})</span>
-                  ) : null}
-                </div>
-              )}
-              {r.veganOptions && (
-                <div className="text-sm text-gray-600">Vegan options: {r.veganOptions}</div>
-              )}
-              {r.vegetarianOptions && (
-                <div className="text-sm text-gray-600">Vegetarian options: {r.vegetarianOptions}</div>
-              )}
-              {r.openingHours && (
-                <div className="text-xs text-gray-500 mt-1">{r.openingHours}</div>
-              )}
-              <div className="mt-2 pt-2 border-t border-gray-200">
-                <a
-                  href={`https://www.google.com/maps?q=${r.lat},${r.lon}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1"
-                >
-                  View on Google Maps
-                </a>
-              </div>
-            </Popup>
-          </Marker>
-        ))}
-
-        {/* Zoom to radius view when midpoint + radius set; otherwise fit all points */}
-        {midpoint && (
-          <FitBoundsToRadius
-            midpoint={midpoint}
-            radiusKm={radiusKm}
-            restaurantPoints={restaurantPoints.length > 0 ? restaurantPoints : undefined}
-          />
-        )}
-        {!midpoint && allPoints.length > 0 && <FitBounds points={allPoints} />}
       </MapContainer>
     </div>
   );
@@ -411,6 +517,26 @@ export default memo(MapDisplay, (prevProps, nextProps) => {
   for (let i = 0; i < restPrev.length; i++) {
     if (restPrev[i].id !== restNext[i].id || restPrev[i].type !== restNext[i].type) return false;
   }
+
+  // Compare midpointsByMode (for 3 lines: center, car, train)
+  const mpPrev = prevProps.midpointsByMode;
+  const mpNext = nextProps.midpointsByMode;
+  if (!!mpPrev !== !!mpNext) return false;
+  if (mpPrev && mpNext) {
+    for (const mode of ['geographic', 'car', 'train'] as const) {
+      const a = mpPrev[mode];
+      const b = mpNext[mode];
+      if (!!a !== !!b) return false;
+      if (a && b && (Math.abs(a.lat - b.lat) > 1e-6 || Math.abs(a.lon - b.lon) > 1e-6)) return false;
+    }
+  }
+
+  // Car route polylines (reference / length change)
+  if (prevProps.carRoutePolylines?.length !== nextProps.carRoutePolylines?.length) return false;
+
+  // Which lines to show (chosen transport mode)
+  if (prevProps.showGeographicLine !== nextProps.showGeographicLine) return false;
+  if (prevProps.showCarLine !== nextProps.showCarLine) return false;
 
   return true; // All props are equal, skip re-render
 });

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import dynamic from 'next/dynamic';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import MatesList from '@/components/MatesList';
 import Recommendation from '@/components/Recommendation';
 import { calculateMidpoint, getDefaultRadiusKm, haversineDistanceKm, Coordinate } from '@/lib/midpoint';
@@ -13,7 +13,8 @@ function getTripTitle(trip: Trip | null): string {
   if (!trip || !trip.theme) {
     return 'Trip Planning';
   }
-  return `${trip.theme.icon} ${trip.theme.name} Trip Planning`;
+  const title = `${trip.theme?.icon ?? ''} ${trip.theme?.name ?? ''} Trip Planning`.trim();
+  return title || 'Trip Planning';
 }
 
 // Dynamically import MapDisplay with SSR disabled
@@ -31,6 +32,7 @@ const MapDisplay = dynamic(() => import('@/components/MapDisplay'), {
 
 export default function TripPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const tripId = params.id as string;
 
   const [trip, setTrip] = useState<Trip | null>(null);
@@ -43,6 +45,10 @@ export default function TripPage() {
   const [placeTypes, setPlaceTypes] = useState<PlaceType[]>(['restaurant']);
   const [recommendation, setRecommendation] = useState<{ placeId: string; reasoning?: string } | null>(null);
   const lastEnrichedKeyRef = useRef<string | null>(null);
+  const [apiMidpoint, setApiMidpoint] = useState<{ lat: number; lon: number } | null>(null);
+  const [meetingPointLoading, setMeetingPointLoading] = useState(false);
+  const [carMidpoint, setCarMidpoint] = useState<{ lat: number; lon: number } | null>(null);
+  const [carRoutePolylines, setCarRoutePolylines] = useState<Array<Array<[number, number]>>>([]);
 
   const togglePlaceType = (type: PlaceType) => {
     setPlaceTypes((prev) =>
@@ -83,17 +89,119 @@ export default function TripPage() {
     }
   }, [tripId]);
 
-  // Calculate midpoint from trip users
-  const midpoint = useMemo(() => {
-    if (!trip || trip.users.length < 2) {
+  // Geographic midpoint (used when transport is geographic, or as fallback)
+  const geographicMidpoint = useMemo(() => {
+    const users = trip?.users ?? [];
+    if (!trip || users.length < 2) {
       return null;
     }
-    const coordinates: Coordinate[] = trip.users.map((user) => ({
+    const coordinates: Coordinate[] = users.map((user) => ({
       lat: user.lat,
       lon: user.lon,
     }));
     return calculateMidpoint(coordinates);
   }, [trip]);
+
+  // Use trip.transportMode from API, or fallback to URL param (e.g. after create) so the chosen line shows
+  const effectiveTransportMode = trip?.transportMode ?? (searchParams.get('transportMode') === 'car' ? 'car' : 'geographic');
+  const wantCarMeetingPoint = trip?.transportMode === 'car' || searchParams.get('transportMode') === 'car';
+
+  // When trip has car transport (from API or URL): fetch travel-time–fair meeting point
+  useEffect(() => {
+    if (!trip || trip.users.length < 2 || !wantCarMeetingPoint) {
+      setApiMidpoint(null);
+      return;
+    }
+    let cancelled = false;
+    setMeetingPointLoading(true);
+    const coordinates = trip.users.map((u) => ({ lat: u.lat, lon: u.lon }));
+    fetch('/api/meeting-point', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ coordinates, transport: 'car' }),
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error(res.statusText);
+        return res.json();
+      })
+      .then((data: { lat: number; lon: number }) => {
+        if (!cancelled) setApiMidpoint({ lat: data.lat, lon: data.lon });
+      })
+      .catch(() => {
+        if (!cancelled) setApiMidpoint(null);
+      })
+      .finally(() => {
+        if (!cancelled) setMeetingPointLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [trip?.id, trip?.users, trip?.transportMode]);
+
+  // Fetch car meeting point for drawing car line (geographic line uses computed midpoint)
+  useEffect(() => {
+    const users = trip?.users ?? [];
+    if (!trip || users.length < 2) {
+      setCarMidpoint(null);
+      return;
+    }
+    const coordinates = users.map((u) => ({ lat: u.lat, lon: u.lon }));
+    const geoFallback = calculateMidpoint(coordinates);
+    let cancelled = false;
+    fetch('/api/meeting-point', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ coordinates, transport: 'car' }),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { lat: number; lon: number } | null) => (cancelled ? null : data))
+      .catch(() => null)
+      .then((car) => {
+        if (!cancelled && geoFallback) setCarMidpoint(car ?? geoFallback);
+      });
+    return () => { cancelled = true; };
+  }, [trip?.id, trip?.users?.length]);
+
+  // Fetch driving route geometry from each startpoint to car midpoint (for drawing road routes on map)
+  useEffect(() => {
+    const users = trip?.users ?? [];
+    const car = carMidpoint;
+    if (!car || users.length < 2) {
+      setCarRoutePolylines([]);
+      return;
+    }
+    let cancelled = false;
+    const coordinates = users.map((u) => ({ lat: u.lat, lon: u.lon }));
+    Promise.all(
+      coordinates.map((start) =>
+        fetch('/api/driving-route', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ start, end: car }),
+        })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((data: { coordinates?: Array<[number, number]> } | null) =>
+            cancelled ? null : data?.coordinates ?? null
+          )
+          .catch(() => null)
+      )
+    ).then((results) => {
+      if (!cancelled) {
+        const valid = results.filter((r): r is Array<[number, number]> => Array.isArray(r) && r.length >= 2);
+        setCarRoutePolylines(valid);
+        if (valid.length === 0 && results.length > 0 && typeof console !== 'undefined' && console.warn) {
+          console.warn('Car routes could not be loaded. Ensure OPENROUTESERVICE_API_KEY is set in .env and the Directions API is available.');
+        }
+      }
+    });
+    return () => { cancelled = true; };
+  }, [trip?.id, trip?.users?.length, carMidpoint?.lat, carMidpoint?.lon]);
+
+  // Display midpoint: car uses API result or geographic fallback; else geographic (incl. legacy train / URL fallback)
+  const midpoint =
+    effectiveTransportMode === 'car'
+      ? (apiMidpoint ?? geographicMidpoint)
+      : geographicMidpoint;
 
   // Convert users to map points
   const mapPoints: MapPoint[] = useMemo(() => {
@@ -107,8 +215,9 @@ export default function TripPage() {
 
   // Set default radius based on trip scale
   useEffect(() => {
-    if (midpoint && trip && trip.users.length >= 2) {
-      const coordinates = trip.users.map((u) => ({ lat: u.lat, lon: u.lon }));
+    const users = trip?.users ?? [];
+    if (midpoint && trip && users.length >= 2) {
+      const coordinates = users.map((u) => ({ lat: u.lat, lon: u.lon }));
       setRadiusKm(getDefaultRadiusKm(midpoint, coordinates));
     }
   }, [midpoint, trip]);
@@ -341,6 +450,13 @@ export default function TripPage() {
                   midpoint={midpoint}
                   radiusKm={radiusKm}
                   restaurants={places}
+                  midpointsByMode={{
+                    geographic: geographicMidpoint ?? undefined,
+                    car: carMidpoint ?? undefined,
+                  }}
+                  showGeographicLine={effectiveTransportMode !== 'car'}
+                  showCarLine={effectiveTransportMode === 'car'}
+                  carRoutePolylines={carRoutePolylines.length > 0 ? carRoutePolylines : undefined}
                 />
               ) : (
                 <div className="h-[500px] flex items-center justify-center border border-gray-300 rounded-lg bg-gray-50">
@@ -461,9 +577,9 @@ export default function TripPage() {
               midpoint={midpoint}
               reasoning={recommendation?.reasoning}
               isLoading={enrichmentLoading || (places.length > 0 && !recommendation && !placesLoading)}
-              themeIcon={trip?.theme?.icon}
+              themeIcon={trip?.theme?.icon ?? '🦫'}
             />
-            <MatesList users={trip.users} />
+            <MatesList users={trip?.users ?? []} />
           </div>
         </div>
       </div>
