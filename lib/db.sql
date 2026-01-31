@@ -5,19 +5,20 @@
 CREATE TABLE IF NOT EXISTS trip_themes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name VARCHAR(100) NOT NULL UNIQUE,
+  icon VARCHAR(10) NOT NULL,
   created_at TIMESTAMP DEFAULT NOW()
 );
 
--- Insert the 8 predefined themes
-INSERT INTO trip_themes (name) VALUES
-  ('City trip'),
-  ('Food & drink'),
-  ('Cultural'),
-  ('Adventure'),
-  ('Nature'),
-  ('Family-Friendly'),
-  ('Wellness'),
-  ('Shopping')
+-- Insert the 8 predefined themes with icons
+INSERT INTO trip_themes (name, icon) VALUES
+  ('City Exploration', '🏙️'),
+  ('Food & Drink', '🍽️'),
+  ('Cultural', '🎭'),
+  ('Adventure', '🧗‍♂️'),
+  ('Nature', '🦫'),
+  ('Family-Friendly', '🧑‍🧑‍🧒'),
+  ('Wellness', '🧘‍♀️'),
+  ('Shopping', '🛍️')
 ON CONFLICT (name) DO NOTHING;
 
 -- Table for trips

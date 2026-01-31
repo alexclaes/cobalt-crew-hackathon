@@ -6,7 +6,7 @@ const sql = neon(process.env.DATABASE_URL!);
 export async function GET() {
   try {
     const themes = await sql`
-      SELECT id, name FROM trip_themes ORDER BY name ASC
+      SELECT id, name, icon FROM trip_themes ORDER BY name ASC
     `;
     return NextResponse.json({ themes });
   } catch (error) {

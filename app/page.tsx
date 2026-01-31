@@ -355,7 +355,7 @@ export default function Home() {
                       <option value="">Select a theme...</option>
                       {themes.map((theme) => (
                         <option key={theme.id} value={theme.id}>
-                          {theme.name}
+                          {theme.icon} {theme.name}
                         </option>
                       ))}
                     </>

@@ -2,6 +2,7 @@
 export interface TripTheme {
   id: string;
   name: string;
+  icon: string;
 }
 
 // API Request type for creating a trip
