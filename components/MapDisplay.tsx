@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useMemo, memo } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Tooltip, Circle, useMap } from 'react-leaflet';
 import L from 'leaflet';
 
 export interface MapPoint {
@@ -143,6 +143,9 @@ function MapDisplay({ startpoints, midpoint, radiusKm = DEFAULT_RADIUS_KM }: Map
             position={[point.lat, point.lon]}
             icon={getDefaultIcon()}
           >
+            <Tooltip permanent direction="top" offset={[0, -40]}>
+              <div className="font-medium">{point.label}</div>
+            </Tooltip>
             <Popup>
               <div className="font-medium">{point.label}</div>
               <div className="text-sm text-gray-600">Start Point</div>
@@ -170,6 +173,9 @@ function MapDisplay({ startpoints, midpoint, radiusKm = DEFAULT_RADIUS_KM }: Map
             position={[midpoint.lat, midpoint.lon]}
             icon={getMidpointIcon()}
           >
+            <Tooltip permanent direction="top" offset={[0, -50]}>
+              <div className="font-bold text-blue-600">Midpoint</div>
+            </Tooltip>
             <Popup>
               <div className="font-bold text-blue-600">Midpoint</div>
               <div className="text-sm text-gray-600">
