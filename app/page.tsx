@@ -34,6 +34,7 @@ export default function Home() {
   const lastEnrichedKeyRef = useRef<string | null>(null);
   const [themes, setThemes] = useState<TripTheme[]>([]);
   const [selectedThemeId, setSelectedThemeId] = useState<string | null>(null);
+  const [triggerVoiceInput, setTriggerVoiceInput] = useState(0);
 
   const togglePlaceType = (type: PlaceType) => {
     setPlaceTypes((prev) =>
@@ -368,23 +369,34 @@ export default function Home() {
       // Add all successfully processed mates
       if (newMates.length > 0) {
         setUsers(prev => [...prev, ...newMates]);
+        console.log(`[Voice] Successfully added ${newMates.length} mate(s)`);
       }
       
-      // Build status message
-      let statusMessage = '';
-      if (newMates.length > 0) {
-        const matesText = newMates.length === 1 ? '1 mate' : `${newMates.length} mates`;
-        statusMessage += `✓ Successfully added ${matesText}!`;
-      }
-      if (skippedMates.length > 0) {
-        statusMessage += `\n\n⚠️ Already added: ${skippedMates.join(', ')}`;
-      }
-      if (notFoundMates.length > 0) {
-        statusMessage += `\n\n❌ Could not find: ${notFoundMates.join(', ')}.\nPlease add them manually.`;
-      }
+      // Only show alert if there are errors (skipped or not found mates)
+      const hasErrors = skippedMates.length > 0 || notFoundMates.length > 0;
       
-      if (statusMessage) {
-        alert(statusMessage);
+      if (hasErrors) {
+        let errorMessage = '';
+        
+        if (skippedMates.length > 0) {
+          errorMessage += `⚠️ Already added (skipped): ${skippedMates.join(', ')}\n\n`;
+        }
+        
+        if (notFoundMates.length > 0) {
+          errorMessage += `❌ Could not find:\n${notFoundMates.map(name => `• ${name}`).join('\n')}\n\n`;
+          errorMessage += `After pressing OK, voice recording will start automatically.\nPlease provide the missing locations or add them manually later.`;
+        }
+        
+        // Show alert and wait for user to dismiss
+        alert(errorMessage);
+        
+        // After dismissing alert, trigger voice input again if there are mates that need location
+        if (notFoundMates.length > 0) {
+          // Small delay to ensure alert is fully dismissed
+          setTimeout(() => {
+            setTriggerVoiceInput(prev => prev + 1);
+          }, 300);
+        }
       }
 
       // Handle theme if provided
@@ -459,6 +471,7 @@ export default function Home() {
                 onError={handleVoiceError}
                 buttonText="🎙️ Start Voice Input"
                 buttonClassName="px-8 py-4 rounded-xl font-semibold text-lg shadow-lg"
+                triggerRecording={triggerVoiceInput}
               />
               
               <p className="text-xs text-gray-500 mt-2">

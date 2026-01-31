@@ -34,6 +34,7 @@ interface VoiceInputProps {
   disabled?: boolean;
   buttonText?: string;
   buttonClassName?: string;
+  triggerRecording?: number; // When this number changes, start recording
 }
 
 type VoiceState = 'idle' | 'listening' | 'processing' | 'success' | 'error';
@@ -46,6 +47,7 @@ export default function VoiceInput({
   disabled = false,
   buttonText,
   buttonClassName,
+  triggerRecording,
 }: VoiceInputProps) {
   const [state, setState] = useState<VoiceState>('idle');
   const [errorMessage, setErrorMessage] = useState<string>('');
@@ -54,6 +56,7 @@ export default function VoiceInput({
   
   const recognitionRef = useRef<any>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const previousTriggerRef = useRef<number>(0);
 
   useEffect(() => {
     // Check browser support for Web Speech API
@@ -181,6 +184,22 @@ export default function VoiceInput({
     };
   }, [context, availableThemes, onResult, onError]);
 
+  // Watch for trigger changes to automatically start recording
+  useEffect(() => {
+    if (triggerRecording !== undefined && triggerRecording !== previousTriggerRef.current) {
+      previousTriggerRef.current = triggerRecording;
+      
+      // Only trigger if we're in idle state and not disabled
+      if (state === 'idle' && !disabled && isSupported && triggerRecording > 0) {
+        console.log('[Voice] Auto-triggering recording from external trigger');
+        // Small delay to ensure UI is ready
+        setTimeout(() => {
+          startListening();
+        }, 100);
+      }
+    }
+  }, [triggerRecording, state, disabled, isSupported]);
+
   const startListening = () => {
     if (!isSupported) {
       const message = 'Voice input is not supported in this browser. Please use Chrome or Edge.';
@@ -227,10 +246,10 @@ export default function VoiceInput({
             <div className="relative flex items-center justify-center">
               <div className="absolute w-12 h-12 bg-red-500 rounded-full animate-ping opacity-75"></div>
               <svg className="w-6 h-6 text-white relative z-10" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd" />
+                <rect x="6" y="6" width="8" height="8" rx="1" />
               </svg>
             </div>
-            <span className="ml-3">Listening...</span>
+            <span className="ml-3">Recording... Click to Stop</span>
           </>
         );
 
@@ -310,6 +329,13 @@ export default function VoiceInput({
       >
         {getButtonContent()}
       </button>
+
+      {/* Recording hint */}
+      {state === 'listening' && (
+        <div className="text-sm text-gray-600 max-w-md text-center animate-pulse">
+          🎙️ Speak now or click the button to stop
+        </div>
+      )}
 
       {/* Transcript preview */}
       {transcript && state === 'processing' && (
