@@ -27,7 +27,9 @@ CREATE TABLE IF NOT EXISTS trips (
   created_at TIMESTAMP DEFAULT NOW(),
   users JSONB NOT NULL,
   theme_id UUID REFERENCES trip_themes(id),
-  recommendation JSONB
+  recommendation JSONB,
+  places JSONB,
+  places_metadata JSONB -- stores midpoint, radius, placeTypes for cache invalidation
 );
 
 -- Index for sorting trips by creation date

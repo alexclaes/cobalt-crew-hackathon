@@ -83,6 +83,7 @@ export default function TripPage() {
           setHasNoRecommendation(false);
           hasStoredRecommendationRef.current = false;
         }
+        // Places will be loaded by the useEffect that checks metadata
       } catch (err) {
         console.error('Error fetching trip:', err);
         setError('Failed to load trip');
@@ -127,13 +128,31 @@ export default function TripPage() {
   }, [midpoint, trip]);
 
   // Fetch places for each selected type in parallel; merge, tag with type, sort by distance
+  // First check if we have cached places that match current parameters
   useEffect(() => {
-    if (!midpoint || placeTypes.length === 0) {
+    if (!midpoint || placeTypes.length === 0 || !trip) {
       setPlaces([]);
       setRecommendation(null);
       return;
     }
 
+    // Check if stored places match current parameters
+    const storedMetadata = trip.placesMetadata;
+    const placeTypesStr = placeTypes.slice().sort().join(',');
+    const metadataMatches = storedMetadata &&
+      storedMetadata.midpointLat === midpoint.lat &&
+      storedMetadata.midpointLon === midpoint.lon &&
+      storedMetadata.radiusKm === radiusKm &&
+      storedMetadata.placeTypes?.slice().sort().join(',') === placeTypesStr;
+
+    // If we have matching cached places, use them (no loading spinner)
+    if (metadataMatches && trip.places && Array.isArray(trip.places) && trip.places.length > 0) {
+      setPlaces(trip.places);
+      setPlacesLoading(false);
+      return;
+    }
+
+    // Otherwise, fetch from Overpass API
     let cancelled = false;
     setPlacesLoading(true);
 
@@ -165,6 +184,26 @@ export default function TripPage() {
             haversineDistanceKm(midpoint, { lat: b.lat, lon: b.lon })
         );
         setPlaces(merged);
+        
+        // Save places to database
+        if (tripId && merged.length > 0) {
+          fetch(`/api/trips/${tripId}/places`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              places: merged,
+              placesMetadata: {
+                midpointLat: midpoint.lat,
+                midpointLon: midpoint.lon,
+                radiusKm,
+                placeTypes: placeTypes.slice(),
+              },
+            }),
+          }).catch((err) => {
+            console.error('Error saving places to database:', err);
+          });
+        }
+        
         // Clear recommendation when places change (unless we have a stored one that matches)
         if (!hasStoredRecommendationRef.current) {
           setRecommendation(null);
@@ -183,7 +222,7 @@ export default function TripPage() {
     return () => {
       cancelled = true;
     };
-  }, [midpoint?.lat, midpoint?.lon, radiusKm, placeTypes.slice().sort().join(',')]);
+  }, [midpoint?.lat, midpoint?.lon, radiusKm, placeTypes.slice().sort().join(','), trip, tripId]);
 
   // Automatic enrichment: when places load (from Overpass), call OpenAI to add cost, rating, vegan/veg, etc.
   useEffect(() => {
@@ -211,6 +250,24 @@ export default function TripPage() {
         if (!cancelled) {
           if (Array.isArray(response.places)) {
             setPlaces(response.places);
+            // Save enriched places back to database
+            if (tripId && response.places.length > 0 && midpoint) {
+              fetch(`/api/trips/${tripId}/places`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  places: response.places,
+                  placesMetadata: {
+                    midpointLat: midpoint.lat,
+                    midpointLon: midpoint.lon,
+                    radiusKm,
+                    placeTypes: placeTypes.slice(),
+                  },
+                }),
+              }).catch((err) => {
+                console.error('Error saving enriched places to database:', err);
+              });
+            }
           }
           if (response.recommendation && response.recommendation.placeId) {
             // Find the full place data from enriched places
@@ -482,14 +539,6 @@ export default function TripPage() {
                     <div className="flex items-center gap-2 text-sm text-gray-600">
                       <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
                       <span>Loading places...</span>
-                    </div>
-                  )}
-
-                  {/* Enrichment Loading Indicator */}
-                  {enrichmentLoading && (
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <div className="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
-                      <span>Enriching with AI...</span>
                     </div>
                   )}
 

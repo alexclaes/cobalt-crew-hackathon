@@ -21,7 +21,7 @@ export async function GET(
     }
 
     // Query database for trip with theme information
-    // Try to include recommendation column, fallback if it doesn't exist
+    // Try to include all columns, fallback if some don't exist
     let result;
     try {
       result = await sql`
@@ -31,6 +31,8 @@ export async function GET(
           t.users,
           t.theme_id,
           t.recommendation,
+          t.places,
+          t.places_metadata,
           tt.name as theme_name,
           tt.icon as theme_icon
         FROM trips t
@@ -38,20 +40,40 @@ export async function GET(
         WHERE t.id = ${id}
       `;
     } catch (err: any) {
-      // If recommendation column doesn't exist, query without it
-      if (err?.message?.includes('recommendation') || err?.message?.includes('column')) {
-        result = await sql`
-          SELECT 
-            t.id, 
-            t.created_at, 
-            t.users,
-            t.theme_id,
-            tt.name as theme_name,
-            tt.icon as theme_icon
-          FROM trips t
-          LEFT JOIN trip_themes tt ON t.theme_id = tt.id
-          WHERE t.id = ${id}
-        `;
+      // If some columns don't exist, query without them
+      if (err?.message?.includes('column')) {
+        try {
+          result = await sql`
+            SELECT 
+              t.id, 
+              t.created_at, 
+              t.users,
+              t.theme_id,
+              t.recommendation,
+              tt.name as theme_name,
+              tt.icon as theme_icon
+            FROM trips t
+            LEFT JOIN trip_themes tt ON t.theme_id = tt.id
+            WHERE t.id = ${id}
+          `;
+        } catch (err2: any) {
+          if (err2?.message?.includes('recommendation')) {
+            result = await sql`
+              SELECT 
+                t.id, 
+                t.created_at, 
+                t.users,
+                t.theme_id,
+                tt.name as theme_name,
+                tt.icon as theme_icon
+              FROM trips t
+              LEFT JOIN trip_themes tt ON t.theme_id = tt.id
+              WHERE t.id = ${id}
+            `;
+          } else {
+            throw err2;
+          }
+        }
       } else {
         throw err;
       }
@@ -76,6 +98,8 @@ export async function GET(
         icon: row.theme_icon,
       } : undefined,
       recommendation: row.recommendation || null,
+      places: row.places || undefined,
+      placesMetadata: row.places_metadata || undefined,
     };
 
     return NextResponse.json(trip);

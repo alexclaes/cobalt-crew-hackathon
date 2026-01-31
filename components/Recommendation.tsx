@@ -31,7 +31,7 @@ export default function Recommendation({ recommendedPlace, midpoint, reasoning, 
       <div className="bg-white rounded-lg shadow-md p-6">
         <h2 className="text-xl font-semibold text-gray-800 mb-4">Recommendation</h2>
         {showLoading ? (
-          <div className="flex items-center justify-center gap-2 py-8">
+          <div className="flex flex-col items-center justify-center gap-2 py-8">
             <style dangerouslySetInnerHTML={{__html: `
               @keyframes jump {
                 0%, 100% { transform: translateY(0); }
@@ -50,9 +50,12 @@ export default function Recommendation({ recommendedPlace, midpoint, reasoning, 
                 animation-delay: 0.4s;
               }
             `}} />
-            <span className="text-4xl inline-block jump-emoji-1">{themeIcon}</span>
-            <span className="text-4xl inline-block jump-emoji-2">{themeIcon}</span>
-            <span className="text-4xl inline-block jump-emoji-3">{themeIcon}</span>
+            <div className="flex items-center justify-center gap-2">
+              <span className="text-4xl inline-block jump-emoji-1">{themeIcon}</span>
+              <span className="text-4xl inline-block jump-emoji-2">{themeIcon}</span>
+              <span className="text-4xl inline-block jump-emoji-3">{themeIcon}</span>
+            </div>
+            <p className="text-sm text-gray-600 mt-2">Enriching with AI...</p>
           </div>
         ) : (
           <div className="text-center py-8 text-gray-500">
@@ -77,11 +80,33 @@ export default function Recommendation({ recommendedPlace, midpoint, reasoning, 
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
-      <h2 className="text-xl font-semibold text-gray-800 mb-4">Recommendation</h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-semibold text-gray-800">Recommendation</h2>
+        {onRegenerate && (
+          <button
+            onClick={onRegenerate}
+            className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
+            title="Regenerate recommendation"
+          >
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
+            </svg>
+          </button>
+        )}
+      </div>
       
       <div className="space-y-3">
         <div>
-          <p className="text-sm text-gray-600 mb-2">Based on the enriched location data, we recommend:</p>
           <h3 className="text-lg font-bold text-gray-900">{recommendedPlace.name}</h3>
         </div>
 
@@ -158,7 +183,7 @@ export default function Recommendation({ recommendedPlace, midpoint, reasoning, 
           </div>
         )}
 
-        <div className="mt-4 pt-3 border-t border-gray-200 flex items-center justify-between">
+        <div className="mt-4 pt-3 border-t border-gray-200">
           <a
             href={`https://www.google.com/maps?q=${recommendedPlace.lat},${recommendedPlace.lon}`}
             target="_blank"
@@ -167,14 +192,6 @@ export default function Recommendation({ recommendedPlace, midpoint, reasoning, 
           >
             View on Google Maps
           </a>
-          {onRegenerate && (
-            <button
-              onClick={onRegenerate}
-              className="text-sm px-3 py-1 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors"
-            >
-              Regenerate
-            </button>
-          )}
         </div>
       </div>
     </div>

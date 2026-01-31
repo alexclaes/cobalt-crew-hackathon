@@ -42,4 +42,11 @@ export interface Trip {
   themeId?: string;
   theme?: TripTheme;
   recommendation?: { place: Restaurant; reasoning?: string } | null;
+  places?: Restaurant[];
+  placesMetadata?: {
+    midpointLat?: number;
+    midpointLon?: number;
+    radiusKm?: number;
+    placeTypes?: string[];
+  };
 }
