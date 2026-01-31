@@ -210,13 +210,11 @@ function MapDisplay({ startpoints, midpoint, radiusKm = DEFAULT_RADIUS_KM, resta
       className="w-full h-[500px] rounded-lg overflow-hidden border border-gray-300"
     >
       <MapContainer
+        ref={mapRef}
         key={`map-container-${containerKeyRef.current}`}
         center={center}
         zoom={defaultZoom}
         style={{ height: '100%', width: '100%' }}
-        whenCreated={(mapInstance) => {
-          mapRef.current = mapInstance;
-        }}
       >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
