@@ -41,6 +41,11 @@ export default function AddressInput({
       clearTimeout(debounceTimerRef.current);
     }
 
+    // Don't search if an address is already selected
+    if (selectedAddress) {
+      return;
+    }
+
     if (query.trim().length < 3) {
       setSuggestions([]);
       setShowSuggestions(false);
@@ -70,7 +75,7 @@ export default function AddressInput({
         clearTimeout(debounceTimerRef.current);
       }
     };
-  }, [query]);
+  }, [query, selectedAddress]);
 
   // Close suggestions when clicking outside
   useEffect(() => {
