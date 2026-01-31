@@ -1,11 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import AddressInput, { AddressSuggestion } from '@/components/AddressInput';
 import UserSelectionModal from '@/components/UserSelectionModal';
+import MapDisplay, { type Restaurant, type PlaceType, type MapPoint } from '@/components/MapDisplay';
 import { User } from '@/types/user';
 import type { CreateTripRequest, CreateTripResponse } from '@/types/trip';
+import { calculateMidpoint, getDefaultRadiusKm, haversineDistanceKm, type Coordinate } from '@/lib/midpoint';
 
 type UserEntry = User & {
   isPreConfigured: boolean;
@@ -18,6 +20,136 @@ export default function Home() {
   const [manualUserCount, setManualUserCount] = useState(0);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCreatingTrip, setIsCreatingTrip] = useState(false);
+  const [showMap, setShowMap] = useState(true);
+  const [radiusKm, setRadiusKm] = useState(50);
+  const [places, setPlaces] = useState<Restaurant[]>([]);
+  const [placesLoading, setPlacesLoading] = useState(false);
+  const [enrichmentLoading, setEnrichmentLoading] = useState(false);
+  const [enrichmentError, setEnrichmentError] = useState<string | null>(null);
+  const [placeTypes, setPlaceTypes] = useState<PlaceType[]>(['restaurant']);
+  const lastEnrichedKeyRef = useRef<string | null>(null);
+
+  const togglePlaceType = (type: PlaceType) => {
+    setPlaceTypes((prev) =>
+      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
+    );
+  };
+
+  // Create a stable key for users to use in useMemo
+  const usersKey = useMemo(() => {
+    return users.map(u => `${u.id}:${u.lat.toFixed(6)},${u.lon.toFixed(6)}`).join('|');
+  }, [users]);
+
+  // Calculate midpoint only when showMap is true - memoize to prevent object recreation
+  const midpoint = useMemo(() => {
+    if (!showMap || users.length < 2) {
+      return null;
+    }
+    const coordinates: Coordinate[] = users.map((user) => ({
+      lat: user.lat,
+      lon: user.lon,
+    }));
+    const result = calculateMidpoint(coordinates);
+    // Return null if calculation failed, otherwise return the result
+    return result;
+  }, [usersKey, showMap, users.length]);
+
+  // Convert users to map points - use stable usersKey
+  const mapPoints: MapPoint[] = useMemo(() => {
+    return users.map((user) => ({
+      lat: user.lat,
+      lon: user.lon,
+      label: user.name,
+    }));
+  }, [usersKey]);
+
+  // Set default radius from trip scale (Germany: small 1 km, mid 15 km, large 50 km) when midpoint/users change
+  const coordinatesForRadius = useMemo(
+    () => users.map((u) => ({ lat: u.lat, lon: u.lon })),
+    [usersKey]
+  );
+  useEffect(() => {
+    if (midpoint && coordinatesForRadius.length >= 2) {
+      setRadiusKm(getDefaultRadiusKm(midpoint, coordinatesForRadius));
+    }
+  }, [midpoint?.lat, midpoint?.lon, coordinatesForRadius.length, usersKey]);
+
+  // Fetch places for each selected type in parallel; merge, tag with type, sort by distance
+  useEffect(() => {
+    if (!midpoint || !showMap || placeTypes.length === 0) {
+      setPlaces([]);
+      return;
+    }
+    let cancelled = false;
+    setPlacesLoading(true);
+    const base = `/api/restaurants?lat=${midpoint.lat}&lon=${midpoint.lon}&radiusKm=${radiusKm}`;
+    const center = { lat: midpoint.lat, lon: midpoint.lon };
+    Promise.all(
+      placeTypes.map((type) =>
+        fetch(`${base}&type=${type}`)
+          .then((res) => (res.ok ? res.json() : []))
+          .then((data: { id: string; name: string; lat: number; lon: number; cuisine?: string; priceRange?: string; openingHours?: string }[]) =>
+            (Array.isArray(data) ? data : []).map((p) => ({
+              ...p,
+              type,
+              id: `${type}-${p.id}`,
+            } as Restaurant))
+          )
+          .catch(() => [] as Restaurant[])
+      )
+    )
+      .then((arrays) => {
+        if (cancelled) return;
+        const merged: Restaurant[] = arrays.flat();
+        merged.sort((a, b) => {
+          const da = haversineDistanceKm(center, { lat: a.lat, lon: a.lon });
+          const db = haversineDistanceKm(center, { lat: b.lat, lon: b.lon });
+          return da - db;
+        });
+        setPlaces(merged);
+      })
+      .finally(() => {
+        if (!cancelled) setPlacesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [midpoint?.lat, midpoint?.lon, radiusKm, showMap, placeTypes.slice().sort().join(',')]);
+
+  // Automatic enrichment: when places load (from Overpass), call OpenAI to add cost, rating, vegan/veg, etc.
+  useEffect(() => {
+    if (!midpoint || places.length === 0 || placesLoading) return;
+    const batchKey = places.map((p) => p.id).sort().join(',');
+    if (batchKey === lastEnrichedKeyRef.current) return;
+    lastEnrichedKeyRef.current = batchKey;
+    let cancelled = false;
+    setEnrichmentLoading(true);
+    setEnrichmentError(null);
+    fetch('/api/enrich-places', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ places, midpoint, radiusKm }),
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error(res.status === 503 ? 'API key not configured' : res.statusText);
+        return res.json();
+      })
+      .then((enriched: Restaurant[]) => {
+        if (!cancelled && Array.isArray(enriched)) {
+          console.log('[Enrich] data from API (merged places from OpenAI):', JSON.stringify(enriched, null, 2));
+          setPlaces(enriched);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) setEnrichmentError(err instanceof Error ? err.message : 'Could not load details');
+      })
+      .finally(() => {
+        if (!cancelled) setEnrichmentLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [midpoint?.lat, midpoint?.lon, radiusKm, places, placesLoading]);
 
   const handleAddressSelect = (userId: string, address: AddressSuggestion) => {
     setUsers((prev) => {
