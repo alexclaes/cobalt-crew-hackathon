@@ -21,18 +21,41 @@ export async function GET(
     }
 
     // Query database for trip with theme information
-    const result = await sql`
-      SELECT 
-        t.id, 
-        t.created_at, 
-        t.users,
-        t.theme_id,
-        tt.name as theme_name,
-        tt.icon as theme_icon
-      FROM trips t
-      LEFT JOIN trip_themes tt ON t.theme_id = tt.id
-      WHERE t.id = ${id}
-    `;
+    // Try to include recommendation column, fallback if it doesn't exist
+    let result;
+    try {
+      result = await sql`
+        SELECT 
+          t.id, 
+          t.created_at, 
+          t.users,
+          t.theme_id,
+          t.recommendation,
+          tt.name as theme_name,
+          tt.icon as theme_icon
+        FROM trips t
+        LEFT JOIN trip_themes tt ON t.theme_id = tt.id
+        WHERE t.id = ${id}
+      `;
+    } catch (err: any) {
+      // If recommendation column doesn't exist, query without it
+      if (err?.message?.includes('recommendation') || err?.message?.includes('column')) {
+        result = await sql`
+          SELECT 
+            t.id, 
+            t.created_at, 
+            t.users,
+            t.theme_id,
+            tt.name as theme_name,
+            tt.icon as theme_icon
+          FROM trips t
+          LEFT JOIN trip_themes tt ON t.theme_id = tt.id
+          WHERE t.id = ${id}
+        `;
+      } else {
+        throw err;
+      }
+    }
 
     if (result.length === 0) {
       return NextResponse.json(
@@ -52,6 +75,7 @@ export async function GET(
         name: row.theme_name,
         icon: row.theme_icon,
       } : undefined,
+      recommendation: row.recommendation || null,
     };
 
     return NextResponse.json(trip);

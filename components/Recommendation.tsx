@@ -8,7 +8,9 @@ interface RecommendationProps {
   midpoint: { lat: number; lon: number } | null;
   reasoning?: string;
   isLoading?: boolean;
+  hasNoRecommendation?: boolean;
   themeIcon?: string;
+  onRegenerate?: () => void;
 }
 
 function ratingToStars(rating: string | number | undefined): string | null {
@@ -20,12 +22,15 @@ function ratingToStars(rating: string | number | undefined): string | null {
   return '★'.repeat(full) + '☆'.repeat(empty);
 }
 
-export default function Recommendation({ recommendedPlace, midpoint, reasoning, isLoading = false, themeIcon = '🦫' }: RecommendationProps) {
+export default function Recommendation({ recommendedPlace, midpoint, reasoning, isLoading = false, hasNoRecommendation = false, themeIcon = '🦫', onRegenerate }: RecommendationProps) {
+  // Show loading spinner if loading OR if no recommendation yet and not explicitly told there's no recommendation
+  const showLoading = isLoading || (!recommendedPlace && !hasNoRecommendation);
+  
   if (!recommendedPlace || !midpoint) {
     return (
       <div className="bg-white rounded-lg shadow-md p-6">
         <h2 className="text-xl font-semibold text-gray-800 mb-4">Recommendation</h2>
-        {isLoading ? (
+        {showLoading ? (
           <div className="flex items-center justify-center gap-2 py-8">
             <style dangerouslySetInnerHTML={{__html: `
               @keyframes jump {
@@ -53,6 +58,14 @@ export default function Recommendation({ recommendedPlace, midpoint, reasoning, 
           <div className="text-center py-8 text-gray-500">
             <p>No recommendation available at this time.</p>
             <p className="text-sm mt-2">Please try adjusting your search criteria or radius.</p>
+            {onRegenerate && (
+              <button
+                onClick={onRegenerate}
+                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+              >
+                Regenerate Recommendation
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -145,7 +158,7 @@ export default function Recommendation({ recommendedPlace, midpoint, reasoning, 
           </div>
         )}
 
-        <div className="mt-4 pt-3 border-t border-gray-200">
+        <div className="mt-4 pt-3 border-t border-gray-200 flex items-center justify-between">
           <a
             href={`https://www.google.com/maps?q=${recommendedPlace.lat},${recommendedPlace.lon}`}
             target="_blank"
@@ -154,6 +167,14 @@ export default function Recommendation({ recommendedPlace, midpoint, reasoning, 
           >
             View on Google Maps
           </a>
+          {onRegenerate && (
+            <button
+              onClick={onRegenerate}
+              className="text-sm px-3 py-1 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors"
+            >
+              Regenerate
+            </button>
+          )}
         </div>
       </div>
     </div>

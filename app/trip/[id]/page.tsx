@@ -41,8 +41,11 @@ export default function TripPage() {
   const [placesLoading, setPlacesLoading] = useState(false);
   const [enrichmentLoading, setEnrichmentLoading] = useState(false);
   const [placeTypes, setPlaceTypes] = useState<PlaceType[]>(['restaurant']);
-  const [recommendation, setRecommendation] = useState<{ placeId: string; reasoning?: string } | null>(null);
+  const [recommendation, setRecommendation] = useState<{ place: Restaurant; reasoning?: string } | null>(null);
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [hasNoRecommendation, setHasNoRecommendation] = useState(false);
   const lastEnrichedKeyRef = useRef<string | null>(null);
+  const hasStoredRecommendationRef = useRef(false);
 
   const togglePlaceType = (type: PlaceType) => {
     setPlaceTypes((prev) =>
@@ -70,6 +73,16 @@ export default function TripPage() {
 
         const tripData: Trip = await response.json();
         setTrip(tripData);
+        // Load stored recommendation if it exists
+        if (tripData.recommendation && tripData.recommendation.place) {
+          setRecommendation(tripData.recommendation);
+          setHasNoRecommendation(false);
+          hasStoredRecommendationRef.current = true;
+        } else {
+          setRecommendation(null);
+          setHasNoRecommendation(false);
+          hasStoredRecommendationRef.current = false;
+        }
       } catch (err) {
         console.error('Error fetching trip:', err);
         setError('Failed to load trip');
@@ -152,7 +165,11 @@ export default function TripPage() {
             haversineDistanceKm(midpoint, { lat: b.lat, lon: b.lon })
         );
         setPlaces(merged);
-        setRecommendation(null); // Clear recommendation when places change
+        // Clear recommendation when places change (unless we have a stored one that matches)
+        if (!hasStoredRecommendationRef.current) {
+          setRecommendation(null);
+          setHasNoRecommendation(false);
+        }
       })
       .catch((err) => {
         console.error('Error fetching places:', err);
@@ -172,11 +189,17 @@ export default function TripPage() {
   useEffect(() => {
     if (!midpoint || places.length === 0 || placesLoading) return;
 
+    // Skip AI enrichment entirely if we have a stored recommendation (unless regenerating)
+    if (hasStoredRecommendationRef.current && !isRegenerating) {
+      return;
+    }
+
     const batchKey = places.map((p) => p.id).sort().join(',');
     if (lastEnrichedKeyRef.current === batchKey) return;
 
     let cancelled = false;
     setEnrichmentLoading(true);
+    setHasNoRecommendation(false);
 
     fetch('/api/enrich-places', {
       method: 'POST',
@@ -190,17 +213,48 @@ export default function TripPage() {
             setPlaces(response.places);
           }
           if (response.recommendation && response.recommendation.placeId) {
-            setRecommendation(response.recommendation);
+            // Find the full place data from enriched places
+            const recommendedPlace = response.places?.find(p => p.id === response.recommendation!.placeId);
+            if (recommendedPlace) {
+              const fullRecommendation = {
+                place: recommendedPlace,
+                reasoning: response.recommendation.reasoning,
+              };
+              setRecommendation(fullRecommendation);
+              setHasNoRecommendation(false);
+              hasStoredRecommendationRef.current = true;
+              // Save full recommendation to database
+              if (tripId) {
+                fetch(`/api/trips/${tripId}/recommendation`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ recommendation: fullRecommendation }),
+                }).catch(err => console.error('Error saving recommendation:', err));
+              }
+            }
           } else {
             setRecommendation(null);
+            setHasNoRecommendation(true);
+            hasStoredRecommendationRef.current = false;
+            // Clear recommendation in database
+            if (tripId) {
+              fetch(`/api/trips/${tripId}/recommendation`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ recommendation: null }),
+              }).catch(err => console.error('Error clearing recommendation:', err));
+            }
           }
           lastEnrichedKeyRef.current = batchKey;
+          setIsRegenerating(false);
         }
       })
       .catch((err) => {
         console.error('Enrichment error:', err);
         if (!cancelled) {
           setRecommendation(null);
+          setHasNoRecommendation(true);
+          setIsRegenerating(false);
         }
       })
       .finally(() => {
@@ -210,7 +264,7 @@ export default function TripPage() {
     return () => {
       cancelled = true;
     };
-  }, [midpoint, places.length, placesLoading, places.map((p) => p.id).sort().join(',')]);
+  }, [midpoint?.lat, midpoint?.lon, places.length, placesLoading, places.map((p) => p.id).sort().join(','), isRegenerating, tripId]);
 
   // Loading state
   if (isLoading) {
@@ -453,15 +507,19 @@ export default function TripPage() {
           {/* Right Column: Recommendation and Mates List */}
           <div className="space-y-6">
             <Recommendation
-              recommendedPlace={
-                recommendation?.placeId
-                  ? places.find((p) => p.id === recommendation.placeId) || null
-                  : null
-              }
+              recommendedPlace={recommendation?.place || null}
               midpoint={midpoint}
               reasoning={recommendation?.reasoning}
-              isLoading={enrichmentLoading || (places.length > 0 && !recommendation && !placesLoading)}
+              isLoading={enrichmentLoading || isRegenerating}
+              hasNoRecommendation={hasNoRecommendation}
               themeIcon={trip?.theme?.icon}
+              onRegenerate={() => {
+                setIsRegenerating(true);
+                setRecommendation(null);
+                setHasNoRecommendation(false);
+                hasStoredRecommendationRef.current = false;
+                lastEnrichedKeyRef.current = null; // Force regeneration
+              }}
             />
             <MatesList users={trip.users} />
           </div>

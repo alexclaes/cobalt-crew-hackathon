@@ -26,7 +26,8 @@ CREATE TABLE IF NOT EXISTS trips (
   id UUID PRIMARY KEY,
   created_at TIMESTAMP DEFAULT NOW(),
   users JSONB NOT NULL,
-  theme_id UUID REFERENCES trip_themes(id)
+  theme_id UUID REFERENCES trip_themes(id),
+  recommendation JSONB
 );
 
 -- Index for sorting trips by creation date

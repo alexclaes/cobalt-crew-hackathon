@@ -32,6 +32,8 @@ export interface TripUser {
   isPreConfigured: boolean;
 }
 
+import type { Restaurant } from '@/components/MapDisplay';
+
 // Complete trip data structure
 export interface Trip {
   id: string;
@@ -39,4 +41,5 @@ export interface Trip {
   users: TripUser[];
   themeId?: string;
   theme?: TripTheme;
+  recommendation?: { place: Restaurant; reasoning?: string } | null;
 }
