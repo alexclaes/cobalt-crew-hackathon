@@ -110,7 +110,7 @@ export default function AddManualMateModal({
         </>
       }
     >
-      <div className="space-y-4">
+      <div className="space-y-4 relative z-10">
         {/* Name Input */}
         <Input
           label="Name"

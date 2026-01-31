@@ -86,7 +86,7 @@ const AddressAutocomplete = forwardRef<HTMLInputElement, AddressAutocompleteProp
         {showSuggestions && suggestions.length > 0 && (
           <div
             ref={suggestionsRef}
-            className="absolute z-10 w-full mt-2 bg-white border-[3px] border-black rounded-lg shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] max-h-60 overflow-y-auto"
+            className="absolute z-[100] w-full mt-2 bg-white border-[3px] border-black rounded-lg shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] max-h-60 overflow-y-auto"
           >
             {suggestions.map((suggestion) => (
               <button
