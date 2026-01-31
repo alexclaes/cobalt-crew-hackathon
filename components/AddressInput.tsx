@@ -138,7 +138,7 @@ export default function AddressInput({
         <div className="flex-shrink-0 w-12 h-12 bg-blue-600 text-white rounded-lg flex items-center justify-center text-2xl font-bold">
           {userNumber}
         </div>
-        
+
         {/* Input Fields */}
         <div className="flex-1 space-y-3 relative">
           {/* Name Input or Display */}

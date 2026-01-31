@@ -6,6 +6,7 @@ import UserSelectionModal from '@/components/UserSelectionModal';
 import AddManualMateModal from '@/components/AddManualMateModal';
 import MateCard from '@/components/MateCard';
 import MapDisplay, { type Restaurant, type PlaceType, type MapPoint } from '@/components/MapDisplay';
+import VoiceInput, { type VoiceResult, type BulkVoiceResult } from '@/components/VoiceInput';
 import { User, UserEntrySchema } from '@/types/user';
 import type { CreateTripRequest, CreateTripResponse, TripTheme } from '@/types/trip';
 import { calculateMidpoint, getDefaultRadiusKm, haversineDistanceKm, type Coordinate } from '@/lib/midpoint';
@@ -266,6 +267,148 @@ export default function Home() {
     }
   };
 
+  // Handle bulk voice input results
+  const handleVoiceResult = async (result: VoiceResult) => {
+    if (result.type === 'bulk') {
+      const bulkResult = result as BulkVoiceResult;
+      console.log('[Voice] Bulk result received:', bulkResult);
+
+      // Load pre-configured users from the JSON file
+      let preConfiguredUsers: User[] = [];
+      try {
+        const usersResponse = await fetch('/data/users.json');
+        if (usersResponse.ok) {
+          const usersData = await usersResponse.json();
+          preConfiguredUsers = usersData.users || [];
+        }
+      } catch (error) {
+        console.error('[Voice] Error loading pre-configured users:', error);
+      }
+
+      // Process each mate from voice input
+      const newMates: UserEntry[] = [];
+      const skippedMates: string[] = [];
+      const notFoundMates: string[] = [];
+      
+      for (const mate of bulkResult.mates) {
+        // Check if mate is already in the current users list
+        const alreadyAdded = users.find(
+          u => u.name.toLowerCase() === mate.name.toLowerCase()
+        );
+        
+        if (alreadyAdded) {
+          console.log(`[Voice] Mate "${mate.name}" is already added, skipping`);
+          skippedMates.push(mate.name);
+          continue;
+        }
+
+        // Check if mate exists in pre-configured users (by name, case-insensitive)
+        const preConfiguredMate = preConfiguredUsers.find(
+          u => u.name.toLowerCase() === mate.name.toLowerCase()
+        );
+
+        if (preConfiguredMate) {
+          // Use the pre-configured mate
+          console.log(`[Voice] Found pre-configured mate: ${preConfiguredMate.name}`);
+          newMates.push({
+            ...preConfiguredMate,
+            isPreConfigured: true,
+            userLabel: `User ${users.length + newMates.length + 1}`,
+            isReadOnly: true,
+          });
+        } else {
+          // Not found in pre-configured list
+          // Check if address is just the name (meaning no location was provided)
+          const hasLocation = mate.address.toLowerCase() !== mate.name.toLowerCase();
+          
+          if (!hasLocation) {
+            // No location provided and not in pre-configured list
+            console.warn(`[Voice] No location provided for: ${mate.name}`);
+            notFoundMates.push(`${mate.name} (no location provided)`);
+          } else {
+            // Try to geocode the address
+            try {
+              const geocodeResponse = await fetch(`/api/geocode?q=${encodeURIComponent(mate.address)}`);
+              if (geocodeResponse.ok) {
+                const geocodeData = await geocodeResponse.json();
+                if (geocodeData.results && geocodeData.results.length > 0) {
+                  const firstResult = geocodeData.results[0];
+                  
+                  // Generate unique ID for manual mate
+                  const mateId = `manual-voice-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                  
+                  newMates.push({
+                    id: mateId,
+                    name: mate.name,
+                    address: firstResult.display_name,
+                    lat: firstResult.lat,
+                    lon: firstResult.lon,
+                    isPreConfigured: false,
+                    userLabel: `User ${users.length + newMates.length + 1}`,
+                    isReadOnly: true,
+                  });
+                  
+                  console.log(`[Voice] Successfully added mate via geocoding: ${mate.name} at ${firstResult.display_name}`);
+                } else {
+                  console.warn(`[Voice] No geocoding results for: ${mate.address}`);
+                  notFoundMates.push(`${mate.name} (${mate.address})`);
+                }
+              } else {
+                console.error(`[Voice] Geocoding failed for: ${mate.address}`);
+                notFoundMates.push(`${mate.name} (${mate.address})`);
+              }
+            } catch (error) {
+              console.error(`[Voice] Error processing mate ${mate.name}:`, error);
+              notFoundMates.push(`${mate.name} (${mate.address})`);
+            }
+          }
+        }
+      }
+
+      // Add all successfully processed mates
+      if (newMates.length > 0) {
+        setUsers(prev => [...prev, ...newMates]);
+      }
+      
+      // Build status message
+      let statusMessage = '';
+      if (newMates.length > 0) {
+        const matesText = newMates.length === 1 ? '1 mate' : `${newMates.length} mates`;
+        statusMessage += `✓ Successfully added ${matesText}!`;
+      }
+      if (skippedMates.length > 0) {
+        statusMessage += `\n\n⚠️ Already added: ${skippedMates.join(', ')}`;
+      }
+      if (notFoundMates.length > 0) {
+        statusMessage += `\n\n❌ Could not find: ${notFoundMates.join(', ')}.\nPlease add them manually.`;
+      }
+      
+      if (statusMessage) {
+        alert(statusMessage);
+      }
+
+      // Handle theme if provided
+      if (bulkResult.theme && themes.length > 0) {
+        // Find matching theme (case-insensitive)
+        const matchingTheme = themes.find(
+          theme => theme.name.toLowerCase() === bulkResult.theme!.toLowerCase()
+        );
+        
+        if (matchingTheme) {
+          setSelectedThemeId(matchingTheme.id);
+          console.log(`[Voice] Selected theme: ${matchingTheme.name}`);
+        } else {
+          console.warn(`[Voice] Could not match theme: ${bulkResult.theme}`);
+        }
+      }
+    }
+  };
+
+  const handleVoiceError = (error: string) => {
+    console.error('[Voice] Error:', error);
+    // Error is already shown in the VoiceInput component
+  };
+
   const alreadySelectedUserIds = users
     .filter(u => u.isPreConfigured)
     .map(u => u.id);
@@ -287,9 +430,42 @@ export default function Home() {
           <h1 className="text-4xl font-bold text-gray-900 mb-2">
             Plan a Weekend Trip
           </h1>
-          <p className="text-gray-600">
+          <p className="text-gray-600 mb-6">
             Add addresses for each participant to find the perfect meeting point
           </p>
+          
+          {/* Quick Start with Voice */}
+          <div className="mb-6 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border-2 border-blue-200">
+            <div className="flex flex-col items-center gap-3">
+              <div className="text-center">
+                <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                  🎤 Quick Start with Voice
+                </h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Say everyone's name and location, plus trip theme!
+                </p>
+                <p className="text-xs text-gray-500 italic mb-3">
+                  Example: "Add Sarah, Michael from Munich, and Alex. I want a food and drink trip."
+                </p>
+                <p className="text-xs text-gray-500 mb-3">
+                  💡 Tip: If a mate is already in the system, just say their name. Otherwise, include their location.
+                </p>
+              </div>
+              
+              <VoiceInput
+                context="bulk"
+                availableThemes={themes.map(t => t.name)}
+                onResult={handleVoiceResult}
+                onError={handleVoiceError}
+                buttonText="🎙️ Start Voice Input"
+                buttonClassName="px-8 py-4 rounded-xl font-semibold text-lg shadow-lg"
+              />
+              
+              <p className="text-xs text-gray-500 mt-2">
+                Works best in Chrome or Edge • Microphone permission required
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* Single Column: Address Inputs */}

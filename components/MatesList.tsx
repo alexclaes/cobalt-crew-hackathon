@@ -31,7 +31,7 @@ export default function MatesList({ users }: MatesListProps) {
           />
         </svg>
       </button>
-      
+
       {isExpanded && (
         <>
           {users.length === 0 ? (
