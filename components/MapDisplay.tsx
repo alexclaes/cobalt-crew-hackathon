@@ -343,6 +343,16 @@ function MapDisplay({ startpoints, midpoint, radiusKm = DEFAULT_RADIUS_KM, resta
               {r.openingHours && (
                 <div className="text-xs text-gray-500 mt-1">{r.openingHours}</div>
               )}
+              <div className="mt-2 pt-2 border-t border-gray-200">
+                <a
+                  href={`https://www.google.com/maps?q=${r.lat},${r.lon}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1"
+                >
+                  View on Google Maps
+                </a>
+              </div>
             </Popup>
           </Marker>
         ))}
