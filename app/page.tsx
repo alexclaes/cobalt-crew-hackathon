@@ -4,11 +4,9 @@ import { useState, useMemo, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import AddressInput, { AddressSuggestion } from '@/components/AddressInput';
 import UserSelectionModal from '@/components/UserSelectionModal';
-import { calculateMidpoint, getDefaultRadiusKm, Coordinate } from '@/lib/midpoint';
-import type { MapPoint } from '@/components/MapDisplay';
-import { User } from '@/types/user';
 import { calculateMidpoint, getDefaultRadiusKm, haversineDistanceKm, Coordinate } from '@/lib/midpoint';
 import type { MapPoint, Restaurant, PlaceType } from '@/components/MapDisplay';
+import { User } from '@/types/user';
 
 // Dynamically import MapDisplay with SSR disabled to prevent "window is not defined" error
 const MapDisplay = dynamic(() => import('@/components/MapDisplay'), {
@@ -82,7 +80,6 @@ export default function Home() {
       setRadiusKm(getDefaultRadiusKm(midpoint, coordinatesForRadius));
     }
   }, [midpoint?.lat, midpoint?.lon, coordinatesForRadius.length, usersKey]);
-  }, [midpoint?.lat, midpoint?.lon, coordinatesForRadius.length, addressesKey]);
 
   // Fetch places for each selected type in parallel; merge, tag with type, sort by distance
   useEffect(() => {
@@ -364,8 +361,6 @@ export default function Home() {
               Map View
             </h2>
             {showMap && users.length > 0 ? (
-              <MapDisplay startpoints={mapPoints} midpoint={midpoint} radiusKm={radiusKm} />
-            {showMap && addresses.length > 0 ? (
               <>
                 <MapDisplay
                   startpoints={mapPoints}
