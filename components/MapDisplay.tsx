@@ -61,7 +61,25 @@ const placeIcons: Partial<Record<PlaceType, L.DivIcon>> = {};
 
 function getPlaceIcon(type: PlaceType): L.DivIcon {
   if (!placeIcons[type] && typeof window !== 'undefined') {
-    const { bg, border } = PLACE_COLORS[type];
+    const colors = PLACE_COLORS[type];
+    if (!colors) {
+      console.warn(`Unknown place type: ${type}, defaulting to restaurant colors`);
+      const { bg, border } = PLACE_COLORS.restaurant;
+      return L.divIcon({
+        className: `place-marker place-marker-unknown`,
+        html: `<div style="
+          width: 24px; height: 24px;
+          background: ${bg};
+          border: 2px solid ${border};
+          border-radius: 50%;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        "></div>`,
+        iconSize: [24, 24],
+        iconAnchor: [12, 12],
+        popupAnchor: [0, -12],
+      });
+    }
+    const { bg, border } = colors;
     placeIcons[type] = L.divIcon({
       className: `place-marker place-marker-${type}`,
       html: `<div style="
@@ -208,14 +226,6 @@ function MapDisplay({ startpoints, midpoint, radiusKm = DEFAULT_RADIUS_KM, resta
     return defaultCenter;
   }, [allPoints]);
 
-  // #region agent log
-  useEffect(() => {
-    if (isMounted) {
-      fetch('http://127.0.0.1:7242/ingest/daa3ccaf-7d89-4e08-bbc6-692373e87c13', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'MapDisplay.tsx:mapRender', message: 'MapDisplay client render', data: { restaurantsCount: restaurants.length }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'H2' }) }).catch(() => {});
-    }
-  }, [isMounted, restaurants.length]);
-  // #endregion
-
   if (!isMounted) {
     return (
       <div className="w-full h-[500px] rounded-lg overflow-hidden border border-gray-300 flex items-center justify-center bg-gray-50">
@@ -294,7 +304,7 @@ function MapDisplay({ startpoints, midpoint, radiusKm = DEFAULT_RADIUS_KM, resta
         )}
 
         {/* Place markers (color by type): restaurants, bars, hotels */}
-        {restaurants.map((r) => (
+        {restaurants.filter((r) => r.type).map((r) => (
           <Marker
             key={r.id}
             position={[r.lat, r.lon]}
