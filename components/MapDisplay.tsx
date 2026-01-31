@@ -12,7 +12,7 @@ export interface MapPoint {
 
 export type PlaceType = 'restaurant' | 'bar' | 'hotel';
 
-/** Place from Overpass (OSM); API response + type for coloring. */
+/** Place from Overpass (OSM); API response + type; optionally enriched by OpenAI. */
 export interface Restaurant {
   id: string;
   name: string;
@@ -22,6 +22,9 @@ export interface Restaurant {
   cuisine?: string;
   priceRange?: string;
   openingHours?: string;
+  rating?: string | number;
+  veganOptions?: 'yes' | 'no' | 'unknown';
+  vegetarianOptions?: 'yes' | 'no' | 'unknown';
 }
 
 interface MapDisplayProps {
@@ -38,6 +41,15 @@ const PLACE_TYPE_LABELS: Record<PlaceType, string> = {
   bar: 'Bar',
   hotel: 'Hotel',
 };
+
+/** Render rating 0–5 as star string (e.g. ★★★★☆). */
+function ratingToStars(rating: string | number | undefined): string | null {
+  const num = typeof rating === 'string' ? parseFloat(rating) : rating;
+  if (num == null || Number.isNaN(num) || num < 0 || num > 5) return null;
+  const full = Math.round(num);
+  const empty = 5 - full;
+  return '★'.repeat(full) + '☆'.repeat(empty);
+}
 
 const PLACE_COLORS: Record<PlaceType, { bg: string; border: string }> = {
   restaurant: { bg: '#ea580c', border: '#c2410c' },
@@ -196,6 +208,14 @@ function MapDisplay({ startpoints, midpoint, radiusKm = DEFAULT_RADIUS_KM, resta
     return defaultCenter;
   }, [allPoints]);
 
+  // #region agent log
+  useEffect(() => {
+    if (isMounted) {
+      fetch('http://127.0.0.1:7242/ingest/daa3ccaf-7d89-4e08-bbc6-692373e87c13', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'MapDisplay.tsx:mapRender', message: 'MapDisplay client render', data: { restaurantsCount: restaurants.length }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'H2' }) }).catch(() => {});
+    }
+  }, [isMounted, restaurants.length]);
+  // #endregion
+
   if (!isMounted) {
     return (
       <div className="w-full h-[500px] rounded-lg overflow-hidden border border-gray-300 flex items-center justify-center bg-gray-50">
@@ -210,13 +230,11 @@ function MapDisplay({ startpoints, midpoint, radiusKm = DEFAULT_RADIUS_KM, resta
       className="w-full h-[500px] rounded-lg overflow-hidden border border-gray-300"
     >
       <MapContainer
+        ref={mapRef}
         key={`map-container-${containerKeyRef.current}`}
         center={center}
         zoom={defaultZoom}
         style={{ height: '100%', width: '100%' }}
-        whenCreated={(mapInstance) => {
-          mapRef.current = mapInstance;
-        }}
       >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -282,7 +300,13 @@ function MapDisplay({ startpoints, midpoint, radiusKm = DEFAULT_RADIUS_KM, resta
             position={[r.lat, r.lon]}
             icon={getPlaceIcon(r.type)}
           >
-            <Popup>
+            <Popup
+              eventHandlers={{
+                open: () => {
+                  console.log('Enriched data (popup opened):', r);
+                },
+              }}
+            >
               <div className="text-xs font-medium text-blue-600 uppercase tracking-wide">
                 {PLACE_TYPE_LABELS[r.type]}
               </div>
@@ -290,8 +314,20 @@ function MapDisplay({ startpoints, midpoint, radiusKm = DEFAULT_RADIUS_KM, resta
               {r.cuisine && (
                 <div className="text-sm text-gray-600">Cuisine / style: {r.cuisine}</div>
               )}
-              {r.priceRange && (
-                <div className="text-sm text-gray-600">Price: {r.priceRange}</div>
+              <div className="text-sm text-gray-600">Price range: {r.priceRange ?? '—'}</div>
+              {r.rating != null && r.rating !== 'unknown' && ratingToStars(r.rating) && (
+                <div className="text-sm text-gray-600">
+                  Rating: <span className="text-amber-500">{ratingToStars(r.rating)}</span>
+                  {typeof r.rating === 'number' || (typeof r.rating === 'string' && !Number.isNaN(parseFloat(r.rating))) ? (
+                    <span className="ml-1 text-gray-500">({r.rating})</span>
+                  ) : null}
+                </div>
+              )}
+              {r.veganOptions && (
+                <div className="text-sm text-gray-600">Vegan options: {r.veganOptions}</div>
+              )}
+              {r.vegetarianOptions && (
+                <div className="text-sm text-gray-600">Vegetarian options: {r.vegetarianOptions}</div>
               )}
               {r.openingHours && (
                 <div className="text-xs text-gray-500 mt-1">{r.openingHours}</div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import AddressInput, { AddressSuggestion } from '@/components/AddressInput';
 import UserSelectionModal from '@/components/UserSelectionModal';
@@ -27,6 +27,13 @@ type UserEntry = User & {
 };
 
 export default function Home() {
+  // #region agent log
+  useEffect(() => {
+    const el = typeof document !== 'undefined' ? document.querySelector('nextjs-portal') : null;
+    const rect = el ? (el as HTMLElement).getBoundingClientRect() : null;
+    fetch('http://127.0.0.1:7242/ingest/daa3ccaf-7d89-4e08-bbc6-692373e87c13', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'page.tsx:Home', message: 'Home mounted', data: { hasWindow: typeof window !== 'undefined', hasPortal: !!el, portalWidth: rect?.width, portalHeight: rect?.height }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'H1' }) }).catch(() => {});
+  }, []);
+  // #endregion
   const [users, setUsers] = useState<UserEntry[]>([]);
   const [manualUserCount, setManualUserCount] = useState(0);
   const [showMap, setShowMap] = useState(false);
@@ -34,7 +41,10 @@ export default function Home() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [places, setPlaces] = useState<Restaurant[]>([]);
   const [placesLoading, setPlacesLoading] = useState(false);
+  const [enrichmentLoading, setEnrichmentLoading] = useState(false);
+  const [enrichmentError, setEnrichmentError] = useState<string | null>(null);
   const [placeTypes, setPlaceTypes] = useState<PlaceType[]>(['restaurant']);
+  const lastEnrichedKeyRef = useRef<string | null>(null);
 
   const togglePlaceType = (type: PlaceType) => {
     setPlaceTypes((prev) =>
@@ -122,6 +132,47 @@ export default function Home() {
       cancelled = true;
     };
   }, [midpoint?.lat, midpoint?.lon, radiusKm, showMap, placeTypes.slice().sort().join(',')]);
+
+  // Automatic enrichment: when places load (from Overpass), call OpenAI to add cost, rating, vegan/veg, etc.
+  useEffect(() => {
+    if (!midpoint || places.length === 0 || placesLoading) return;
+    const batchKey = places.map((p) => p.id).sort().join(',');
+    if (batchKey === lastEnrichedKeyRef.current) return;
+    lastEnrichedKeyRef.current = batchKey;
+    let cancelled = false;
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/daa3ccaf-7d89-4e08-bbc6-692373e87c13', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'page.tsx:enrichEffect', message: 'enrich starting', data: { placesCount: places.length }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'H3' }) }).catch(() => {});
+    // #endregion
+    setEnrichmentLoading(true);
+    setEnrichmentError(null);
+    fetch('/api/enrich-places', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ places, midpoint, radiusKm }),
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error(res.status === 503 ? 'API key not configured' : res.statusText);
+        return res.json();
+      })
+      .then((enriched: Restaurant[]) => {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/daa3ccaf-7d89-4e08-bbc6-692373e87c13', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'page.tsx:enrichSuccess', message: 'enrich success', data: { isArray: Array.isArray(enriched), len: enriched?.length }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'H3' }) }).catch(() => {});
+        // #endregion
+        if (!cancelled && Array.isArray(enriched)) setPlaces(enriched);
+      })
+      .catch((err) => {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/daa3ccaf-7d89-4e08-bbc6-692373e87c13', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'page.tsx:enrichCatch', message: 'enrich error', data: { errMsg: err?.message }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'H3' }) }).catch(() => {});
+        // #endregion
+        if (!cancelled) setEnrichmentError(err instanceof Error ? err.message : 'Could not load details');
+      })
+      .finally(() => {
+        if (!cancelled) setEnrichmentLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [midpoint?.lat, midpoint?.lon, radiusKm, places, placesLoading]);
 
   const handleAddressSelect = (userId: string, address: AddressSuggestion) => {
     setUsers((prev) => {
@@ -370,6 +421,12 @@ export default function Home() {
                 />
                 {placesLoading && (
                   <p className="text-sm text-gray-500 mt-2">Loading places…</p>
+                )}
+                {enrichmentLoading && (
+                  <p className="text-sm text-gray-500 mt-2">Enriching places…</p>
+                )}
+                {enrichmentError && (
+                  <p className="text-sm text-amber-600 mt-2">{enrichmentError}</p>
                 )}
                 {!placesLoading && midpoint && placeTypes.length > 0 && (
                   <p className="text-sm text-gray-500 mt-2">

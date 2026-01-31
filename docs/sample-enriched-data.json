@@ -1,0 +1,59 @@
+{
+  "description": "Beispiel für echte Enriched-Daten (nach Merge), wie sie die App nach dem OpenAI-Aufruf erhält. Format = Restaurant[] (gleiche Struktur wie in MapDisplay-Popup).",
+  "midpoint": { "lat": 53.5503, "lon": 9.9923 },
+  "radiusKm": 15,
+  "places": [
+    {
+      "id": "restaurant-node-482917263",
+      "name": "Vapiano",
+      "lat": 53.55034,
+      "lon": 9.99234,
+      "type": "restaurant",
+      "cuisine": "italian",
+      "priceRange": "€€",
+      "openingHours": "Mo-Su 11:00-23:00",
+      "rating": 4,
+      "veganOptions": "yes",
+      "vegetarianOptions": "yes"
+    },
+    {
+      "id": "restaurant-way-9876543",
+      "name": "Block House",
+      "lat": 53.5512,
+      "lon": 9.9889,
+      "type": "restaurant",
+      "cuisine": "steakhouse",
+      "priceRange": "€€€",
+      "openingHours": "Mo-Su 11:30-23:00",
+      "rating": 4.2,
+      "veganOptions": "no",
+      "vegetarianOptions": "yes"
+    },
+    {
+      "id": "bar-node-11223344",
+      "name": "Le Lion",
+      "lat": 53.5498,
+      "lon": 9.9955,
+      "type": "bar",
+      "cuisine": "cocktail_bar",
+      "priceRange": "€€€",
+      "openingHours": "Tu-Sa 18:00-02:00",
+      "rating": 4.5,
+      "veganOptions": "unknown",
+      "vegetarianOptions": "unknown"
+    },
+    {
+      "id": "hotel-node-55667788",
+      "name": "Hotel Hafen Hamburg",
+      "lat": 53.54412,
+      "lon": 9.96111,
+      "type": "hotel",
+      "cuisine": "",
+      "priceRange": "€€€",
+      "openingHours": "24/7",
+      "rating": 4.3,
+      "veganOptions": "unknown",
+      "vegetarianOptions": "unknown"
+    }
+  ]
+}
