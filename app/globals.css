@@ -2,6 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Next.js dev overlay (nextjs-portal): ensure overlay has valid dimensions; overlay content uses rem and needs a font-size reference */
+nextjs-portal {
+  font-size: 16px;
+  min-width: 1px;
+  min-height: 1px;
+}
+
 /* Place markers (restaurant/bar/hotel): no default Leaflet icon background */
 .leaflet-div-icon.place-marker {
   background: transparent !important;

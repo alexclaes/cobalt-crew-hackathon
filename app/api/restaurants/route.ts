@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { haversineDistanceKm } from '@/lib/midpoint';
 
-const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
+// Try multiple Overpass endpoints; overpass-api.de can return 502/504 when overloaded
+const OVERPASS_ENDPOINTS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+];
+const USER_AGENT = 'CobaltCrewHackathon/1.0 (meetup midpoint finder)';
 
 export type PlaceType = 'restaurant' | 'bar' | 'hotel';
 
@@ -98,43 +104,55 @@ export async function GET(request: NextRequest) {
 out center;
   `.trim();
 
-  try {
-    const res = await fetch(OVERPASS_URL, {
-      method: 'POST',
-      body: query,
-      headers: { 'Content-Type': 'text/plain' },
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      return NextResponse.json(
-        { error: 'Overpass request failed', details: text.slice(0, 200) },
-        { status: 502 }
-      );
+  let lastError: string | null = null;
+  let lastStatus: number | null = null;
+
+  for (const baseUrl of OVERPASS_ENDPOINTS) {
+    try {
+      const res = await fetch(baseUrl, {
+        method: 'POST',
+        body: query,
+        headers: {
+          'Content-Type': 'text/plain',
+          'User-Agent': USER_AGENT,
+        },
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        lastStatus = res.status;
+        lastError = `${res.status} ${res.statusText}: ${text.slice(0, 300)}`;
+        continue;
+      }
+      const data: OverpassResponse = await res.json();
+      const center = { lat: latNum, lon: lonNum };
+
+      const restaurants: RestaurantResult[] = [];
+      for (const el of data.elements) {
+        const r = elementToRestaurant(el, center);
+        if (r) restaurants.push(r);
+      }
+
+      restaurants.sort((a, b) => {
+        const da = haversineDistanceKm(center, { lat: a.lat, lon: a.lon });
+        const db = haversineDistanceKm(center, { lat: b.lat, lon: b.lon });
+        return da - db;
+      });
+
+      const MAX_PER_CATEGORY = 5;
+      const limited = restaurants.slice(0, MAX_PER_CATEGORY);
+      return NextResponse.json(limited);
+    } catch (e) {
+      lastError = e instanceof Error ? e.message : String(e);
+      continue;
     }
-    const data: OverpassResponse = await res.json();
-    const center = { lat: latNum, lon: lonNum };
-
-    const restaurants: RestaurantResult[] = [];
-    for (const el of data.elements) {
-      const r = elementToRestaurant(el, center);
-      if (r) restaurants.push(r);
-    }
-
-    // Sort by distance (nearest first), then limit to nearest 5 per category
-    restaurants.sort((a, b) => {
-      const da = haversineDistanceKm(center, { lat: a.lat, lon: a.lon });
-      const db = haversineDistanceKm(center, { lat: b.lat, lon: b.lon });
-      return da - db;
-    });
-
-    const MAX_PER_CATEGORY = 5;
-    const limited = restaurants.slice(0, MAX_PER_CATEGORY);
-    return NextResponse.json(limited);
-  } catch (e) {
-    console.error('Places API error:', e);
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : 'Failed to fetch restaurants' },
-      { status: 500 }
-    );
   }
+
+  return NextResponse.json(
+    {
+      error: 'All Overpass endpoints failed',
+      details: lastError ?? 'Unknown',
+      lastStatus: lastStatus ?? undefined,
+    },
+    { status: 502 }
+  );
 }

@@ -135,6 +135,7 @@ export async function POST(request: NextRequest) {
     }
 
     const enrichedList = Array.isArray(parsed.places) ? parsed.places : [];
+    console.log('[Enrich API] OpenAI response (enriched items):', JSON.stringify(enrichedList, null, 2));
     const merged = mergeEnriched(places, enrichedList);
     return NextResponse.json(merged);
   } catch (e) {

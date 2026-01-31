@@ -44,6 +44,7 @@ const PLACE_TYPE_LABELS: Record<PlaceType, string> = {
 
 /** Render rating 0–5 as star string (e.g. ★★★★☆). */
 function ratingToStars(rating: string | number | undefined): string | null {
+  if (rating !== undefined && typeof rating !== 'string' && typeof rating !== 'number') return null;
   const num = typeof rating === 'string' ? parseFloat(rating) : rating;
   if (num == null || Number.isNaN(num) || num < 0 || num > 5) return null;
   const full = Math.round(num);
@@ -309,14 +310,15 @@ function MapDisplay({ startpoints, midpoint, radiusKm = DEFAULT_RADIUS_KM, resta
             key={r.id}
             position={[r.lat, r.lon]}
             icon={getPlaceIcon(r.type)}
+            eventHandlers={{
+              click: () => {
+                try {
+                  console.log('[Enriched data] place clicked:', JSON.stringify(r, null, 2));
+                } catch (_) {}
+              },
+            }}
           >
-            <Popup
-              eventHandlers={{
-                open: () => {
-                  console.log('Enriched data (popup opened):', r);
-                },
-              }}
-            >
+            <Popup>
               <div className="text-xs font-medium text-blue-600 uppercase tracking-wide">
                 {PLACE_TYPE_LABELS[r.type]}
               </div>
