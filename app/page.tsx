@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import AddressInput, { AddressSuggestion } from '@/components/AddressInput';
 import UserSelectionModal from '@/components/UserSelectionModal';
 import MapDisplay, { type Restaurant, type PlaceType, type MapPoint } from '@/components/MapDisplay';
-import { User } from '@/types/user';
+import { User, UserEntrySchema } from '@/types/user';
 import type { CreateTripRequest, CreateTripResponse } from '@/types/trip';
 import { calculateMidpoint, getDefaultRadiusKm, haversineDistanceKm, type Coordinate } from '@/lib/midpoint';
 
@@ -212,19 +212,23 @@ export default function Home() {
   };
 
   const handleCreateTrip = async () => {
-    if (users.length < 2) {
+    // Validate that we have at least 2 users with complete information
+    const validUsers = users.filter(user => UserEntrySchema.safeParse(user).success);
+    
+    if (validUsers.length < 2) {
+      alert('Please add at least two mates with complete information (name and address)');
       return;
     }
 
     setIsCreatingTrip(true);
 
     try {
-      // Separate pre-configured and manual users
-      const preConfiguredUserIds = users
+      // Separate pre-configured and manual users (use validUsers only)
+      const preConfiguredUserIds = validUsers
         .filter((u) => u.isPreConfigured)
         .map((u) => u.id);
 
-      const manualUsers = users
+      const manualUsers = validUsers
         .filter((u) => !u.isPreConfigured)
         .map((u) => ({
           name: u.name,
@@ -266,7 +270,15 @@ export default function Home() {
     .filter(u => u.isPreConfigured)
     .map(u => u.id);
 
-  const canCalculate = users.length >= 2;
+  // Filter users with complete and valid information using Zod validation
+  const completeUsers = useMemo(() => {
+    return users.filter(user => {
+      const result = UserEntrySchema.safeParse(user);
+      return result.success;
+    });
+  }, [users]);
+
+  const canCalculate = completeUsers.length >= 2;
 
   return (
     <main className="min-h-screen bg-gray-50 py-8 px-4">
@@ -351,7 +363,11 @@ export default function Home() {
                 ) : (
                   <div className="p-4 bg-yellow-50 rounded-md border border-yellow-200">
                     <div className="text-sm text-yellow-800">
-                      Add at least two mates
+                      {users.length === 0
+                        ? 'Add at least two mates'
+                        : completeUsers.length === 0
+                        ? 'Please complete the information for your mates (name and address)'
+                        : `Add ${2 - completeUsers.length} more mate(s) with complete information`}
                     </div>
                   </div>
                 )}
