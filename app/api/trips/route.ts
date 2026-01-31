@@ -10,7 +10,7 @@ const sql = neon(process.env.DATABASE_URL!);
 export async function POST(request: Request) {
   try {
     const body: CreateTripRequest = await request.json();
-    const { preConfiguredUserIds, manualUsers, themeId } = body;
+    const { preConfiguredUserIds, manualUsers, themeId, transportMode } = body;
 
     // Validate input
     if (!Array.isArray(preConfiguredUserIds) || !Array.isArray(manualUsers)) {
@@ -59,11 +59,25 @@ export async function POST(request: Request) {
       );
     }
 
-    // Save to database
-    await sql`
-      INSERT INTO trips (id, users, theme_id)
-      VALUES (${tripId}, ${JSON.stringify(tripUsers)}, ${themeId})
-    `;
+    // Save to database (transport_mode optional; fallback to 3-column INSERT if column missing)
+    const transportModeVal = transportMode === 'car' || transportMode === 'train' ? transportMode : null;
+    try {
+      await sql`
+        INSERT INTO trips (id, users, theme_id, transport_mode)
+        VALUES (${tripId}, ${JSON.stringify(tripUsers)}, ${themeId}, ${transportModeVal})
+      `;
+    } catch (insertError: unknown) {
+      const err = insertError as { code?: string; message?: string };
+      const isMissingColumn = err?.code === '42703' || (typeof err?.message === 'string' && err.message.includes('transport_mode') && err.message.includes('does not exist'));
+      if (isMissingColumn) {
+        await sql`
+          INSERT INTO trips (id, users, theme_id)
+          VALUES (${tripId}, ${JSON.stringify(tripUsers)}, ${themeId})
+        `;
+      } else {
+        throw insertError;
+      }
+    }
 
     const response: CreateTripResponse = { tripId };
     return NextResponse.json(response);

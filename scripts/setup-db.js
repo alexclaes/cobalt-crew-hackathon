@@ -60,7 +60,8 @@ async function setupDatabase() {
         id UUID PRIMARY KEY,
         created_at TIMESTAMP DEFAULT NOW(),
         users JSONB NOT NULL,
-        theme_id UUID REFERENCES trip_themes(id)
+        theme_id UUID REFERENCES trip_themes(id),
+        transport_mode VARCHAR(20)
       )
     `;
     console.log('✅ Trips table created');

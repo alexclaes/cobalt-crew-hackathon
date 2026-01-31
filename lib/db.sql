@@ -27,10 +27,17 @@ CREATE TABLE IF NOT EXISTS trips (
   created_at TIMESTAMP DEFAULT NOW(),
   users JSONB NOT NULL,
   theme_id UUID REFERENCES trip_themes(id),
+  transport_mode VARCHAR(20),
   recommendation JSONB, -- Structure: { [PlaceType]: { "current": { "place": {...}, "reasoning": "..." } | null, "previous": { "place": {...}, "reasoning": "..." } | null } } - PlaceType can be any of: restaurant, bar, hotel, camping, hostel, shop, museum, theatre, spa, natural formations, brewery map, historic, elevation, dog map
   places JSONB,
   places_metadata JSONB -- stores midpoint, radius, placeTypes for cache invalidation
 );
+
+-- For existing DBs: run these once to add missing columns (PostgreSQL)
+-- DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'trips' AND column_name = 'transport_mode') THEN ALTER TABLE trips ADD COLUMN transport_mode VARCHAR(20); END IF; END $$;
+-- DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'trips' AND column_name = 'recommendation') THEN ALTER TABLE trips ADD COLUMN recommendation JSONB; END IF; END $$;
+-- DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'trips' AND column_name = 'places') THEN ALTER TABLE trips ADD COLUMN places JSONB; END IF; END $$;
+-- DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'trips' AND column_name = 'places_metadata') THEN ALTER TABLE trips ADD COLUMN places_metadata JSONB; END IF; END $$;
 
 -- Index for sorting trips by creation date
 CREATE INDEX IF NOT EXISTS idx_trips_created_at ON trips(created_at DESC);
