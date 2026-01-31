@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState, useMemo, memo } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Tooltip, Circle, useMap } from 'react-leaflet';
+import { useEffect, useRef, useState, useMemo, memo, createRef } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, Tooltip, Circle, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 
 export interface MapPoint {
@@ -34,6 +34,8 @@ interface MapDisplayProps {
   radiusKm?: number;
   /** Places within radius (from Overpass API), each with type for marker color. */
   restaurants?: Restaurant[];
+  /** IDs of recommended places to highlight on the map */
+  recommendedPlaceIds?: Set<string>;
 }
 
 const PLACE_TYPE_LABELS: Record<PlaceType, string> = {
@@ -58,44 +60,51 @@ const PLACE_COLORS: Record<PlaceType, { bg: string; border: string }> = {
   hotel: { bg: '#059669', border: '#047857' },
 };
 
-const placeIcons: Partial<Record<PlaceType, L.DivIcon>> = {};
+const placeIcons: Map<string, L.DivIcon> = new Map();
 
-function getPlaceIcon(type: PlaceType): L.DivIcon {
-  if (!placeIcons[type] && typeof window !== 'undefined') {
+function getPlaceIcon(type: PlaceType, isRecommended: boolean = false): L.DivIcon {
+  const iconKey = `${type}-${isRecommended ? 'recommended' : 'normal'}`;
+  if (!placeIcons.has(iconKey) && typeof window !== 'undefined') {
     const colors = PLACE_COLORS[type];
     if (!colors) {
       console.warn(`Unknown place type: ${type}, defaulting to restaurant colors`);
       const { bg, border } = PLACE_COLORS.restaurant;
-      return L.divIcon({
+      const icon = L.divIcon({
         className: `place-marker place-marker-unknown`,
         html: `<div style="
-          width: 24px; height: 24px;
+          width: ${isRecommended ? '32px' : '20px'}; 
+          height: ${isRecommended ? '32px' : '20px'};
           background: ${bg};
           border: 2px solid ${border};
           border-radius: 50%;
           box-shadow: 0 1px 3px rgba(0,0,0,0.3);
         "></div>`,
-        iconSize: [24, 24],
-        iconAnchor: [12, 12],
-        popupAnchor: [0, -12],
+        iconSize: [isRecommended ? 32 : 20, isRecommended ? 32 : 20],
+        iconAnchor: [isRecommended ? 16 : 10, isRecommended ? 16 : 10],
+        popupAnchor: [0, isRecommended ? -16 : -10],
       });
+      placeIcons.set(iconKey, icon);
+      return icon;
     }
     const { bg, border } = colors;
-    placeIcons[type] = L.divIcon({
-      className: `place-marker place-marker-${type}`,
+    const icon = L.divIcon({
+      className: `place-marker place-marker-${type} ${isRecommended ? 'recommended' : ''}`,
       html: `<div style="
-        width: 24px; height: 24px;
+        width: ${isRecommended ? '32px' : '20px'}; 
+        height: ${isRecommended ? '32px' : '20px'};
         background: ${bg};
         border: 2px solid ${border};
         border-radius: 50%;
         box-shadow: 0 1px 3px rgba(0,0,0,0.3);
       "></div>`,
-      iconSize: [24, 24],
-      iconAnchor: [12, 12],
-      popupAnchor: [0, -12],
+      iconSize: [isRecommended ? 32 : 20, isRecommended ? 32 : 20],
+      iconAnchor: [isRecommended ? 16 : 10, isRecommended ? 16 : 10],
+      popupAnchor: [0, isRecommended ? -16 : -10],
     });
+    placeIcons.set(iconKey, icon);
+    return icon;
   }
-  return placeIcons[type]!;
+  return placeIcons.get(iconKey)!;
 }
 
 // Fix for default marker icons in React-Leaflet - moved inside component to avoid SSR issues
@@ -180,7 +189,7 @@ function FitBoundsToRadius({
 
 const DEFAULT_RADIUS_KM = 50;
 
-function MapDisplay({ startpoints, midpoint, radiusKm = DEFAULT_RADIUS_KM, restaurants = [] }: MapDisplayProps) {
+function MapDisplay({ startpoints, midpoint, radiusKm = DEFAULT_RADIUS_KM, restaurants = [], recommendedPlaceIds = new Set() }: MapDisplayProps) {
   const [isMounted, setIsMounted] = useState(false);
   const mapRef = useRef<L.Map | null>(null);
   const containerKeyRef = useRef(Math.random().toString(36).substring(7));
@@ -304,11 +313,13 @@ function MapDisplay({ startpoints, midpoint, radiusKm = DEFAULT_RADIUS_KM, resta
         )}
 
         {/* Place markers (color by type): restaurants, bars, hotels */}
-        {restaurants.filter((r) => r.type).map((r) => (
+        {restaurants.filter((r) => r.type).map((r) => {
+          const isRecommended = recommendedPlaceIds.has(r.id);
+          return (
           <Marker
             key={`${r.id}-${r.type}`}
             position={[r.lat, r.lon]}
-            icon={getPlaceIcon(r.type)}
+            icon={getPlaceIcon(r.type, isRecommended)}
             eventHandlers={{
               click: () => {
                 try {
@@ -322,10 +333,12 @@ function MapDisplay({ startpoints, midpoint, radiusKm = DEFAULT_RADIUS_KM, resta
                 {PLACE_TYPE_LABELS[r.type]}
               </div>
               <div className="font-medium text-gray-900">{r.name}</div>
-              {r.cuisine && (
+              {r.cuisine && r.cuisine !== 'unknown' && (
                 <div className="text-sm text-gray-600">Cuisine / style: {r.cuisine}</div>
               )}
-              <div className="text-sm text-gray-600">Price range: {r.priceRange ?? '—'}</div>
+              {r.priceRange && r.priceRange !== 'unknown' && (
+                <div className="text-sm text-gray-600">Price range: {r.priceRange}</div>
+              )}
               {r.rating != null && r.rating !== 'unknown' && ratingToStars(r.rating) && (
                 <div className="text-sm text-gray-600">
                   Rating: <span className="text-amber-500">{ratingToStars(r.rating)}</span>
@@ -334,13 +347,13 @@ function MapDisplay({ startpoints, midpoint, radiusKm = DEFAULT_RADIUS_KM, resta
                   ) : null}
                 </div>
               )}
-              {r.veganOptions && (
+              {r.veganOptions && r.veganOptions !== 'unknown' && (
                 <div className="text-sm text-gray-600">Vegan options: {r.veganOptions}</div>
               )}
-              {r.vegetarianOptions && (
+              {r.vegetarianOptions && r.vegetarianOptions !== 'unknown' && (
                 <div className="text-sm text-gray-600">Vegetarian options: {r.vegetarianOptions}</div>
               )}
-              {r.openingHours && (
+              {r.openingHours && r.openingHours !== 'unknown' && (
                 <div className="text-xs text-gray-500 mt-1">{r.openingHours}</div>
               )}
               <div className="mt-2 pt-2 border-t border-gray-200">
@@ -355,7 +368,8 @@ function MapDisplay({ startpoints, midpoint, radiusKm = DEFAULT_RADIUS_KM, resta
               </div>
             </Popup>
           </Marker>
-        ))}
+          );
+        })}
 
         {/* Zoom to radius view when midpoint + radius set; otherwise fit all points */}
         {midpoint && (

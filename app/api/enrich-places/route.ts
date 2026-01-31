@@ -37,21 +37,22 @@ export interface EnrichedPlace extends PlaceInput {
 
 const SYSTEM_PROMPT = `You are a helpful assistant. You output only valid JSON. All places you receive are already near the given midpoint (within radiusKm). For each place, add or refine: cost (exactly one of "€", "€€", "€€€"), rating (number 0–5 or "unknown"), openingHours (string or keep existing), cuisine (string), veganOptions ("yes" | "no" | "unknown"), vegetarianOptions ("yes" | "no" | "unknown"). If you don't know, use "unknown". 
 
-Additionally, analyze all enriched places and recommend the best location based on all factors: rating, distance to midpoint, price value, cuisine quality, dietary options, and opening hours. Consider the overall best balance of these factors.
+Additionally, analyze enriched places separately by their type (restaurant, bar, hotel) and recommend the best location for EACH category based on all factors: rating, distance to midpoint, price value, cuisine/appeal, dietary options (for restaurants/bars), and opening hours. Consider the overall best balance of these factors for each category.
 
 Return a JSON object with two keys:
 1. "places": an array of objects; each object must include "id" (same as input) plus the enriched fields above.
-2. "recommendation": an object with "placeId" (the id of the recommended place) and optionally "reasoning" (a brief 1-2 sentence explanation of why this place was recommended). If no place is suitable for recommendation, set "placeId" to null.`;
+2. "recommendations": an object with keys "restaurant", "bar", and "hotel". Each key contains an object with "placeId" (the id of the recommended place of that type, or null if no suitable place) and optionally "reasoning" (a brief 1-2 sentence explanation). Only include recommendations for categories that have places in the input.`;
 
 function buildUserPrompt(
   midpoint: { lat: number; lon: number },
   radiusKm: number,
-  places: PlaceInput[]
+  places: PlaceInput[],
+  placeTypes: string[]
 ): string {
-  const payload = JSON.stringify({ midpoint, radiusKm, places });
+  const payload = JSON.stringify({ midpoint, radiusKm, places, placeTypes });
   return `${payload}\n\nOnly include and enrich places that are near this midpoint (they already are; do not add new locations). All places in the list are near the given midpoint (within radiusKm). Only return these same places with enriched fields; do not add or suggest other locations.
 
-After enriching all places, analyze them holistically considering: rating quality, distance to midpoint (closer is better), price value (balance of cost and quality), cuisine appeal, dietary accommodation (vegan/vegetarian options), and opening hours availability. Recommend the single best location that offers the best overall experience.`;
+After enriching all places, analyze them separately by type (restaurant, bar, hotel). For each category that has places in the input, recommend the single best location of that type considering: rating quality, distance to midpoint (closer is better), price value (balance of cost and quality), cuisine/appeal, dietary accommodation (for restaurants/bars), and opening hours availability. Only generate recommendations for categories that are in the placeTypes array and have places of that type in the input.`;
 }
 
 function mergeEnriched(
@@ -89,6 +90,7 @@ export async function POST(request: NextRequest) {
     places?: PlaceInput[];
     midpoint?: { lat: number; lon: number };
     radiusKm?: number;
+    placeTypes?: string[];
   };
   try {
     body = await request.json();
@@ -96,22 +98,24 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { places, midpoint, radiusKm } = body;
+  const { places, midpoint, radiusKm, placeTypes } = body;
   if (
     !Array.isArray(places) ||
     places.length === 0 ||
     !midpoint ||
     typeof midpoint.lat !== 'number' ||
     typeof midpoint.lon !== 'number' ||
-    typeof radiusKm !== 'number'
+    typeof radiusKm !== 'number' ||
+    !Array.isArray(placeTypes) ||
+    placeTypes.length === 0
   ) {
     return NextResponse.json(
-      { error: 'Missing or invalid: places (non-empty array), midpoint { lat, lon }, radiusKm' },
+      { error: 'Missing or invalid: places (non-empty array), midpoint { lat, lon }, radiusKm, placeTypes (non-empty array)' },
       { status: 400 }
     );
   }
 
-  const userPrompt = buildUserPrompt(midpoint, radiusKm, places);
+  const userPrompt = buildUserPrompt(midpoint, radiusKm, places, placeTypes);
 
   try {
     const completion = await openai.chat.completions.create({
@@ -131,7 +135,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    let parsed: { places?: EnrichedItem[]; recommendation?: { placeId: string | null; reasoning?: string } };
+    let parsed: { 
+      places?: EnrichedItem[]; 
+      recommendations?: { 
+        restaurant?: { placeId: string | null; reasoning?: string };
+        bar?: { placeId: string | null; reasoning?: string };
+        hotel?: { placeId: string | null; reasoning?: string };
+      };
+    };
     try {
       parsed = JSON.parse(content);
     } catch {
@@ -146,16 +157,30 @@ export async function POST(request: NextRequest) {
     console.log('[Enrich API] OpenAI response (enriched items):', JSON.stringify(enrichedList, null, 2));
     const merged = mergeEnriched(places, enrichedList);
     
-    // Extract recommendation
-    const recommendation = parsed.recommendation || { placeId: null };
-    console.log('[Enrich API] Recommendation:', JSON.stringify(recommendation, null, 2));
+    // Extract recommendations per category
+    const recommendations = parsed.recommendations || {};
+    console.log('[Enrich API] Recommendations:', JSON.stringify(recommendations, null, 2));
+    
+    // Build recommendations object, only including categories that are in placeTypes
+    const recommendationsResponse: {
+      restaurant?: { placeId: string | null; reasoning?: string };
+      bar?: { placeId: string | null; reasoning?: string };
+      hotel?: { placeId: string | null; reasoning?: string };
+    } = {};
+    
+    if (placeTypes.includes('restaurant') && recommendations.restaurant) {
+      recommendationsResponse.restaurant = recommendations.restaurant;
+    }
+    if (placeTypes.includes('bar') && recommendations.bar) {
+      recommendationsResponse.bar = recommendations.bar;
+    }
+    if (placeTypes.includes('hotel') && recommendations.hotel) {
+      recommendationsResponse.hotel = recommendations.hotel;
+    }
     
     return NextResponse.json({
       places: merged,
-      recommendation: recommendation.placeId ? {
-        placeId: recommendation.placeId,
-        reasoning: recommendation.reasoning
-      } : null
+      recommendations: recommendationsResponse
     });
   } catch (e) {
     console.error('Enrich places API error:', e);

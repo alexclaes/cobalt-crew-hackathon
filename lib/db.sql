@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS trips (
   created_at TIMESTAMP DEFAULT NOW(),
   users JSONB NOT NULL,
   theme_id UUID REFERENCES trip_themes(id),
-  recommendation JSONB,
+  recommendation JSONB, -- Structure: { "restaurant": { "current": { "place": {...}, "reasoning": "..." } | null, "previous": { "place": {...}, "reasoning": "..." } | null }, "bar": { "current": {...} | null, "previous": {...} | null }, "hotel": { "current": {...} | null, "previous": {...} | null } }
   places JSONB,
   places_metadata JSONB -- stores midpoint, radius, placeTypes for cache invalidation
 );

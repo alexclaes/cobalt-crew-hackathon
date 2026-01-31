@@ -74,9 +74,18 @@ export async function GET(request: NextRequest) {
   const lat = searchParams.get('lat');
   const lon = searchParams.get('lon');
   const radiusKm = searchParams.get('radiusKm');
-  const typeParam = (searchParams.get('type') ?? 'restaurant').toLowerCase();
-  const placeType: PlaceType =
-    typeParam === 'bar' ? 'bar' : typeParam === 'hotel' ? 'hotel' : 'restaurant';
+  const typesParam = searchParams.get('types') || searchParams.get('type') || 'restaurant';
+  
+  // Support both single type and comma-separated types
+  const requestedTypes: PlaceType[] = typesParam
+    .split(',')
+    .map(t => t.trim().toLowerCase())
+    .filter(t => ['restaurant', 'bar', 'hotel'].includes(t))
+    .map(t => t as PlaceType);
+  
+  if (requestedTypes.length === 0) {
+    requestedTypes.push('restaurant');
+  }
 
   if (!lat || !lon || !radiusKm) {
     return NextResponse.json(
@@ -93,13 +102,19 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid parameters' }, { status: 400 });
   }
 
-  const { node: nodeFilter, way: wayFilter } = PLACE_QUERIES[placeType];
-  // Overpass QL: nodes and ways for chosen type within radius; out center for ways
+  // Build combined query for all requested types
+  const queryParts: string[] = [];
+  for (const placeType of requestedTypes) {
+    const { node: nodeFilter, way: wayFilter } = PLACE_QUERIES[placeType];
+    queryParts.push(`${nodeFilter}(around:${radiusM},${latNum},${lonNum});`);
+    queryParts.push(`${wayFilter}(around:${radiusM},${latNum},${lonNum});`);
+  }
+
+  // Overpass QL: nodes and ways for all requested types within radius; out center for ways
   const query = `
 [out:json][timeout:25];
 (
-  ${nodeFilter}(around:${radiusM},${latNum},${lonNum});
-  ${wayFilter}(around:${radiusM},${latNum},${lonNum});
+  ${queryParts.join('\n  ')}
 );
 out center;
   `.trim();
@@ -126,21 +141,56 @@ out center;
       const data: OverpassResponse = await res.json();
       const center = { lat: latNum, lon: lonNum };
 
-      const restaurants: RestaurantResult[] = [];
+      // Group results by type and limit per category
+      const resultsByType: Record<PlaceType, RestaurantResult[]> = {
+        restaurant: [],
+        bar: [],
+        hotel: [],
+      };
+
       for (const el of data.elements) {
-        const r = elementToRestaurant(el, center);
-        if (r) restaurants.push(r);
+        const tags = el.tags ?? {};
+        let placeType: PlaceType | null = null;
+        
+        // Determine type from OSM tags
+        if (tags.amenity === 'restaurant') placeType = 'restaurant';
+        else if (tags.amenity === 'bar') placeType = 'bar';
+        else if (tags.tourism === 'hotel') placeType = 'hotel';
+        
+        if (placeType && requestedTypes.includes(placeType)) {
+          const r = elementToRestaurant(el, center);
+          if (r) {
+            resultsByType[placeType].push(r);
+          }
+        }
       }
 
-      restaurants.sort((a, b) => {
+      // Sort each category by distance and limit
+      const MAX_PER_CATEGORY = 5;
+      const allResults: Array<RestaurantResult & { type: PlaceType }> = [];
+      
+      for (const placeType of requestedTypes) {
+        const places = resultsByType[placeType];
+        places.sort((a, b) => {
+          const da = haversineDistanceKm(center, { lat: a.lat, lon: a.lon });
+          const db = haversineDistanceKm(center, { lat: b.lat, lon: b.lon });
+          return da - db;
+        });
+        
+        const limited = places.slice(0, MAX_PER_CATEGORY);
+        for (const place of limited) {
+          allResults.push({ ...place, type: placeType });
+        }
+      }
+
+      // Sort all results by distance
+      allResults.sort((a, b) => {
         const da = haversineDistanceKm(center, { lat: a.lat, lon: a.lon });
         const db = haversineDistanceKm(center, { lat: b.lat, lon: b.lon });
         return da - db;
       });
 
-      const MAX_PER_CATEGORY = 5;
-      const limited = restaurants.slice(0, MAX_PER_CATEGORY);
-      return NextResponse.json(limited);
+      return NextResponse.json(allResults);
     } catch (e) {
       lastError = e instanceof Error ? e.message : String(e);
       continue;

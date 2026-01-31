@@ -36,22 +36,23 @@ export default function TripPage() {
   const [trip, setTrip] = useState<Trip | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [radiusKm, setRadiusKm] = useState(50);
+  const [radiusKm, setRadiusKm] = useState(50); // Displayed radius (updates immediately)
+  const [fetchRadiusKm, setFetchRadiusKm] = useState(50); // Radius used for fetching (updates on release)
   const [places, setPlaces] = useState<Restaurant[]>([]);
   const [placesLoading, setPlacesLoading] = useState(false);
   const [enrichmentLoading, setEnrichmentLoading] = useState(false);
-  const [placeTypes, setPlaceTypes] = useState<PlaceType[]>(['restaurant']);
-  const [recommendation, setRecommendation] = useState<{ place: Restaurant; reasoning?: string } | null>(null);
-  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [placeTypes] = useState<PlaceType[]>(['restaurant', 'bar', 'hotel']); // Always fetch all three types
+  const [recommendations, setRecommendations] = useState<{
+    restaurant?: { current: { place: Restaurant; reasoning?: string } | null; previous: { place: Restaurant; reasoning?: string } | null };
+    bar?: { current: { place: Restaurant; reasoning?: string } | null; previous: { place: Restaurant; reasoning?: string } | null };
+    hotel?: { current: { place: Restaurant; reasoning?: string } | null; previous: { place: Restaurant; reasoning?: string } | null };
+  }>({});
+  const [isRegenerating, setIsRegenerating] = useState<PlaceType | null>(null);
   const [hasNoRecommendation, setHasNoRecommendation] = useState(false);
   const lastEnrichedKeyRef = useRef<string | null>(null);
-  const hasStoredRecommendationRef = useRef(false);
+  const hasStoredRecommendationsRef = useRef<Set<PlaceType>>(new Set());
 
-  const togglePlaceType = (type: PlaceType) => {
-    setPlaceTypes((prev) =>
-      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
-    );
-  };
+  // Place types are now always all three - no toggle needed
 
   // Fetch trip data
   useEffect(() => {
@@ -73,15 +74,23 @@ export default function TripPage() {
 
         const tripData: Trip = await response.json();
         setTrip(tripData);
-        // Load stored recommendation if it exists
-        if (tripData.recommendation && tripData.recommendation.place) {
-          setRecommendation(tripData.recommendation);
-          setHasNoRecommendation(false);
-          hasStoredRecommendationRef.current = true;
+        // Load stored recommendations if they exist
+        if (tripData.recommendation) {
+          setRecommendations(tripData.recommendation);
+          // Track which categories have stored recommendations
+          hasStoredRecommendationsRef.current = new Set();
+          if (tripData.recommendation.restaurant?.current) {
+            hasStoredRecommendationsRef.current.add('restaurant');
+          }
+          if (tripData.recommendation.bar?.current) {
+            hasStoredRecommendationsRef.current.add('bar');
+          }
+          if (tripData.recommendation.hotel?.current) {
+            hasStoredRecommendationsRef.current.add('hotel');
+          }
         } else {
-          setRecommendation(null);
-          setHasNoRecommendation(false);
-          hasStoredRecommendationRef.current = false;
+          setRecommendations({});
+          hasStoredRecommendationsRef.current = new Set();
         }
         // Places will be loaded by the useEffect that checks metadata
       } catch (err) {
@@ -123,16 +132,29 @@ export default function TripPage() {
   useEffect(() => {
     if (midpoint && trip && trip.users.length >= 2) {
       const coordinates = trip.users.map((u) => ({ lat: u.lat, lon: u.lon }));
-      setRadiusKm(getDefaultRadiusKm(midpoint, coordinates));
+      const defaultRadius = getDefaultRadiusKm(midpoint, coordinates);
+      setRadiusKm(defaultRadius);
+      setFetchRadiusKm(defaultRadius);
     }
   }, [midpoint, trip]);
+
+  // Clear recommendations when fetch radius changes (new places = new recommendations needed)
+  const previousRadiusRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (previousRadiusRef.current !== null && previousRadiusRef.current !== fetchRadiusKm) {
+      // Fetch radius changed - clear stored recommendations and force re-enrichment
+      setRecommendations({});
+      hasStoredRecommendationsRef.current.clear();
+      lastEnrichedKeyRef.current = null;
+    }
+    previousRadiusRef.current = fetchRadiusKm;
+  }, [fetchRadiusKm]);
 
   // Fetch places for each selected type in parallel; merge, tag with type, sort by distance
   // First check if we have cached places that match current parameters
   useEffect(() => {
     if (!midpoint || placeTypes.length === 0 || !trip) {
       setPlaces([]);
-      setRecommendation(null);
       return;
     }
 
@@ -142,7 +164,7 @@ export default function TripPage() {
     const metadataMatches = storedMetadata &&
       storedMetadata.midpointLat === midpoint.lat &&
       storedMetadata.midpointLon === midpoint.lon &&
-      storedMetadata.radiusKm === radiusKm &&
+      storedMetadata.radiusKm === fetchRadiusKm &&
       storedMetadata.placeTypes?.slice().sort().join(',') === placeTypesStr;
 
     // If we have matching cached places, use them (no loading spinner)
@@ -152,68 +174,52 @@ export default function TripPage() {
       return;
     }
 
-    // Otherwise, fetch from Overpass API
+    // Otherwise, fetch from Overpass API (single fetch for all types)
     let cancelled = false;
     setPlacesLoading(true);
 
-    const base = `/api/restaurants?lat=${midpoint.lat}&lon=${midpoint.lon}&radiusKm=${radiusKm}`;
-    const fetches = placeTypes.map((type) =>
-      fetch(`${base}&type=${type}`)
-        .then((r) => r.json())
-        .then((places) => ({ type, places }))
-    );
-
-    Promise.all(fetches)
-      .then((results) => {
+    const typesParam = placeTypes.join(',');
+    fetch(`/api/restaurants?lat=${midpoint.lat}&lon=${midpoint.lon}&radiusKm=${fetchRadiusKm}&types=${typesParam}`)
+      .then((r) => r.json())
+      .then((places: Restaurant[]) => {
         if (cancelled) return;
-        const merged: Restaurant[] = [];
-        for (const result of results) {
-          if (Array.isArray(result.places)) {
-            // Tag each place with its type
-            const tagged = result.places.map((place) => ({
-              ...place,
-              type: result.type,
-            }));
-            merged.push(...tagged);
+        // Places already have type from API
+        if (Array.isArray(places)) {
+          // Sort by distance from midpoint
+          places.sort(
+            (a, b) =>
+              haversineDistanceKm(midpoint, { lat: a.lat, lon: a.lon }) -
+              haversineDistanceKm(midpoint, { lat: b.lat, lon: b.lon })
+          );
+          setPlaces(places);
+          
+          // Save places to database
+          if (tripId && places.length > 0) {
+            fetch(`/api/trips/${tripId}/places`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                places,
+                placesMetadata: {
+                  midpointLat: midpoint.lat,
+                  midpointLon: midpoint.lon,
+                  radiusKm: fetchRadiusKm,
+                  placeTypes: placeTypes.slice(),
+                },
+              }),
+            }).catch((err) => {
+              console.error('Error saving places to database:', err);
+            });
           }
-        }
-        // Sort by distance from midpoint
-        merged.sort(
-          (a, b) =>
-            haversineDistanceKm(midpoint, { lat: a.lat, lon: a.lon }) -
-            haversineDistanceKm(midpoint, { lat: b.lat, lon: b.lon })
-        );
-        setPlaces(merged);
-        
-        // Save places to database
-        if (tripId && merged.length > 0) {
-          fetch(`/api/trips/${tripId}/places`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              places: merged,
-              placesMetadata: {
-                midpointLat: midpoint.lat,
-                midpointLon: midpoint.lon,
-                radiusKm,
-                placeTypes: placeTypes.slice(),
-              },
-            }),
-          }).catch((err) => {
-            console.error('Error saving places to database:', err);
-          });
+        } else {
+          setPlaces([]);
         }
         
-        // Clear recommendation when places change (unless we have a stored one that matches)
-        if (!hasStoredRecommendationRef.current) {
-          setRecommendation(null);
-          setHasNoRecommendation(false);
-        }
+        // Recommendations are handled separately in the enrichment effect
       })
       .catch((err) => {
         console.error('Error fetching places:', err);
         setPlaces([]);
-        setRecommendation(null);
       })
       .finally(() => {
         if (!cancelled) setPlacesLoading(false);
@@ -222,14 +228,17 @@ export default function TripPage() {
     return () => {
       cancelled = true;
     };
-  }, [midpoint?.lat, midpoint?.lon, radiusKm, placeTypes.slice().sort().join(','), trip, tripId]);
+  }, [midpoint?.lat, midpoint?.lon, fetchRadiusKm, placeTypes.slice().sort().join(','), trip, tripId]);
 
   // Automatic enrichment: when places load (from Overpass), call OpenAI to add cost, rating, vegan/veg, etc.
   useEffect(() => {
     if (!midpoint || places.length === 0 || placesLoading) return;
 
-    // Skip AI enrichment entirely if we have a stored recommendation (unless regenerating)
-    if (hasStoredRecommendationRef.current && !isRegenerating) {
+    // Skip AI enrichment for categories that have stored recommendations (unless regenerating that category)
+    const needsEnrichment = placeTypes.some(type => 
+      !hasStoredRecommendationsRef.current.has(type) || isRegenerating === type
+    );
+    if (!needsEnrichment && !isRegenerating) {
       return;
     }
 
@@ -243,10 +252,10 @@ export default function TripPage() {
     fetch('/api/enrich-places', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ places, midpoint, radiusKm }),
+      body: JSON.stringify({ places, midpoint, radiusKm: fetchRadiusKm, placeTypes }),
     })
       .then((r) => r.json())
-      .then((response: { places?: Restaurant[]; recommendation?: { placeId: string; reasoning?: string } | null }) => {
+      .then((response: { places?: Restaurant[]; recommendations?: { restaurant?: { placeId: string | null; reasoning?: string }; bar?: { placeId: string | null; reasoning?: string }; hotel?: { placeId: string | null; reasoning?: string } } }) => {
         if (!cancelled) {
           if (Array.isArray(response.places)) {
             setPlaces(response.places);
@@ -260,7 +269,7 @@ export default function TripPage() {
                   placesMetadata: {
                     midpointLat: midpoint.lat,
                     midpointLon: midpoint.lon,
-                    radiusKm,
+                    radiusKm: fetchRadiusKm,
                     placeTypes: placeTypes.slice(),
                   },
                 }),
@@ -269,49 +278,68 @@ export default function TripPage() {
               });
             }
           }
-          if (response.recommendation && response.recommendation.placeId) {
-            // Find the full place data from enriched places
-            const recommendedPlace = response.places?.find(p => p.id === response.recommendation!.placeId);
-            if (recommendedPlace) {
-              const fullRecommendation = {
-                place: recommendedPlace,
-                reasoning: response.recommendation.reasoning,
-              };
-              setRecommendation(fullRecommendation);
-              setHasNoRecommendation(false);
-              hasStoredRecommendationRef.current = true;
-              // Save full recommendation to database
-              if (tripId) {
-                fetch(`/api/trips/${tripId}/recommendation`, {
-                  method: 'PUT',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ recommendation: fullRecommendation }),
-                }).catch(err => console.error('Error saving recommendation:', err));
+          
+          // Process recommendations per category
+          if (response.recommendations) {
+            setRecommendations((prev) => {
+              const updated = { ...prev };
+              
+              for (const category of ['restaurant', 'bar', 'hotel'] as PlaceType[]) {
+                const categoryRec = response.recommendations?.[category];
+                if (categoryRec && categoryRec.placeId) {
+                  // Find the full place data from enriched places
+                  const recommendedPlace = response.places?.find(p => p.id === categoryRec.placeId);
+                  if (recommendedPlace) {
+                    const fullRecommendation = {
+                      place: recommendedPlace,
+                      reasoning: categoryRec.reasoning,
+                    };
+                    
+                    // Store new recommendation (no history)
+                    const newCategoryRec = {
+                      current: fullRecommendation,
+                      previous: null, // History removed - always null
+                    };
+                    updated[category] = newCategoryRec;
+                    
+                    // Save to database
+                    if (tripId) {
+                      fetch(`/api/trips/${tripId}/recommendation`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                          recommendation: fullRecommendation,
+                          category 
+                        }),
+                      }).catch(err => console.error(`Error saving ${category} recommendation:`, err));
+                    }
+                    
+                    hasStoredRecommendationsRef.current.add(category);
+                  }
+                } else if (categoryRec && categoryRec.placeId === null && placeTypes.includes(category)) {
+                  // No recommendation for this category, but it was requested
+                  if (!updated[category]) {
+                    updated[category] = { current: null, previous: null };
+                  }
+                }
               }
-            }
+              
+              return updated;
+            });
+            setHasNoRecommendation(false);
           } else {
-            setRecommendation(null);
             setHasNoRecommendation(true);
-            hasStoredRecommendationRef.current = false;
-            // Clear recommendation in database
-            if (tripId) {
-              fetch(`/api/trips/${tripId}/recommendation`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ recommendation: null }),
-              }).catch(err => console.error('Error clearing recommendation:', err));
-            }
           }
+          
           lastEnrichedKeyRef.current = batchKey;
-          setIsRegenerating(false);
+          setIsRegenerating(null);
         }
       })
       .catch((err) => {
         console.error('Enrichment error:', err);
         if (!cancelled) {
-          setRecommendation(null);
           setHasNoRecommendation(true);
-          setIsRegenerating(false);
+          setIsRegenerating(null);
         }
       })
       .finally(() => {
@@ -321,7 +349,7 @@ export default function TripPage() {
     return () => {
       cancelled = true;
     };
-  }, [midpoint?.lat, midpoint?.lon, places.length, placesLoading, places.map((p) => p.id).sort().join(','), isRegenerating, tripId]);
+  }, [midpoint?.lat, midpoint?.lon, places.length, placesLoading, places.map((p) => p.id).sort().join(','), isRegenerating, tripId, placeTypes]);
 
   // Loading state
   if (isLoading) {
@@ -450,8 +478,13 @@ export default function TripPage() {
                 <MapDisplay
                   startpoints={mapPoints}
                   midpoint={midpoint}
-                  radiusKm={radiusKm}
+                  radiusKm={fetchRadiusKm}
                   restaurants={places}
+                  recommendedPlaceIds={new Set(
+                    Object.values(recommendations)
+                      .filter(rec => rec?.current?.place?.id)
+                      .map(rec => rec!.current!.place.id)
+                  )}
                 />
               ) : (
                 <div className="h-[500px] flex items-center justify-center border border-gray-300 rounded-lg bg-gray-50">
@@ -487,6 +520,8 @@ export default function TripPage() {
                       step={1}
                       value={radiusKm}
                       onChange={(e) => setRadiusKm(Number(e.target.value))}
+                      onMouseUp={(e) => setFetchRadiusKm(Number((e.target as HTMLInputElement).value))}
+                      onTouchEnd={(e) => setFetchRadiusKm(Number((e.target as HTMLInputElement).value))}
                       className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
                     />
                     <div className="flex justify-between text-xs text-gray-500 mt-1">
@@ -495,44 +530,6 @@ export default function TripPage() {
                     </div>
                   </div>
 
-                  {/* Place Type Selection */}
-                  <fieldset>
-                    <legend className="block text-sm font-medium text-gray-700 mb-2">
-                      Show places (multiselect)
-                    </legend>
-                    <div className="flex flex-wrap gap-4">
-                      <label className="inline-flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={placeTypes.includes('restaurant')}
-                          onChange={() => togglePlaceType('restaurant')}
-                          className="rounded border-gray-300 text-orange-600 focus:ring-orange-500"
-                        />
-                        <span className="text-sm text-gray-700">Restaurants</span>
-                        <span className="w-3 h-3 rounded-full bg-[#ea580c]" aria-hidden />
-                      </label>
-                      <label className="inline-flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={placeTypes.includes('bar')}
-                          onChange={() => togglePlaceType('bar')}
-                          className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
-                        />
-                        <span className="text-sm text-gray-700">Bars</span>
-                        <span className="w-3 h-3 rounded-full bg-[#9333ea]" aria-hidden />
-                      </label>
-                      <label className="inline-flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={placeTypes.includes('hotel')}
-                          onChange={() => togglePlaceType('hotel')}
-                          className="rounded border-gray-300 text-green-600 focus:ring-green-500"
-                        />
-                        <span className="text-sm text-gray-700">Hotels</span>
-                        <span className="w-3 h-3 rounded-full bg-[#16a34a]" aria-hidden />
-                      </label>
-                    </div>
-                  </fieldset>
 
                   {/* Places Loading Indicator */}
                   {placesLoading && (
@@ -545,7 +542,7 @@ export default function TripPage() {
                   {/* Places Count */}
                   {places.length > 0 && !placesLoading && (
                     <div className="text-sm text-gray-600">
-                      Found {places.length} place{places.length !== 1 ? 's' : ''} within {radiusKm} km
+                      Found {places.length} place{places.length !== 1 ? 's' : ''} within {fetchRadiusKm} km
                     </div>
                   )}
                 </div>
@@ -556,17 +553,18 @@ export default function TripPage() {
           {/* Right Column: Recommendation and Mates List */}
           <div className="space-y-6">
             <Recommendation
-              recommendedPlace={recommendation?.place || null}
+              recommendations={recommendations}
+              places={places}
               midpoint={midpoint}
-              reasoning={recommendation?.reasoning}
-              isLoading={enrichmentLoading || isRegenerating}
+              isLoading={enrichmentLoading || isRegenerating !== null}
+              placesLoading={placesLoading}
               hasNoRecommendation={hasNoRecommendation}
               themeIcon={trip?.theme?.icon}
-              onRegenerate={() => {
-                setIsRegenerating(true);
-                setRecommendation(null);
+              selectedPlaceTypes={placeTypes}
+              onRegenerate={(category) => {
+                setIsRegenerating(category);
                 setHasNoRecommendation(false);
-                hasStoredRecommendationRef.current = false;
+                hasStoredRecommendationsRef.current.delete(category);
                 lastEnrichedKeyRef.current = null; // Force regeneration
               }}
             />
