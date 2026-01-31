@@ -181,7 +181,6 @@ function FitBoundsToRadius({
 const DEFAULT_RADIUS_KM = 50;
 
 function MapDisplay({ startpoints, midpoint, radiusKm = DEFAULT_RADIUS_KM, restaurants = [] }: MapDisplayProps) {
-  const renderId = useRef(Math.random().toString(36).substring(7));
   const [isMounted, setIsMounted] = useState(false);
   const mapRef = useRef<L.Map | null>(null);
   const containerKeyRef = useRef(Math.random().toString(36).substring(7));
@@ -307,7 +306,7 @@ function MapDisplay({ startpoints, midpoint, radiusKm = DEFAULT_RADIUS_KM, resta
         {/* Place markers (color by type): restaurants, bars, hotels */}
         {restaurants.filter((r) => r.type).map((r) => (
           <Marker
-            key={r.id}
+            key={`${r.id}-${r.type}`}
             position={[r.lat, r.lon]}
             icon={getPlaceIcon(r.type)}
             eventHandlers={{
