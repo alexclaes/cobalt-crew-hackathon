@@ -20,13 +20,46 @@ async function setupDatabase() {
   console.log('🔌 Connecting to Neon database...');
   
   try {
+    // Drop existing tables (if recreating)
+    console.log('🗑️  Dropping existing tables if they exist...');
+    await sql`DROP TABLE IF EXISTS trips CASCADE`;
+    await sql`DROP TABLE IF EXISTS trip_themes CASCADE`;
+    console.log('✅ Existing tables dropped');
+    
+    // Create trip_themes table with UUID
+    console.log('📝 Creating trip_themes table...');
+    await sql`
+      CREATE TABLE trip_themes (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name VARCHAR(100) NOT NULL UNIQUE,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `;
+    console.log('✅ Trip themes table created');
+    
+    // Insert predefined themes
+    console.log('📝 Inserting trip themes...');
+    await sql`
+      INSERT INTO trip_themes (name) VALUES
+        ('City trip'),
+        ('Food & drink'),
+        ('Cultural'),
+        ('Adventure'),
+        ('Nature'),
+        ('Family-Friendly'),
+        ('Wellness'),
+        ('Shopping')
+    `;
+    console.log('✅ Trip themes inserted');
+    
     // Create trips table
     console.log('📝 Creating trips table...');
     await sql`
-      CREATE TABLE IF NOT EXISTS trips (
+      CREATE TABLE trips (
         id UUID PRIMARY KEY,
         created_at TIMESTAMP DEFAULT NOW(),
-        users JSONB NOT NULL
+        users JSONB NOT NULL,
+        theme_id UUID REFERENCES trip_themes(id)
       )
     `;
     console.log('✅ Trips table created');

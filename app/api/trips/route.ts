@@ -10,12 +10,20 @@ const sql = neon(process.env.DATABASE_URL!);
 export async function POST(request: Request) {
   try {
     const body: CreateTripRequest = await request.json();
-    const { preConfiguredUserIds, manualUsers } = body;
+    const { preConfiguredUserIds, manualUsers, themeId } = body;
 
     // Validate input
     if (!Array.isArray(preConfiguredUserIds) || !Array.isArray(manualUsers)) {
       return NextResponse.json(
         { error: 'Invalid request body' },
+        { status: 400 }
+      );
+    }
+
+    // Validate theme ID
+    if (!themeId || typeof themeId !== 'string') {
+      return NextResponse.json(
+        { error: 'Valid theme ID is required' },
         { status: 400 }
       );
     }
@@ -53,8 +61,8 @@ export async function POST(request: Request) {
 
     // Save to database
     await sql`
-      INSERT INTO trips (id, users)
-      VALUES (${tripId}, ${JSON.stringify(tripUsers)})
+      INSERT INTO trips (id, users, theme_id)
+      VALUES (${tripId}, ${JSON.stringify(tripUsers)}, ${themeId})
     `;
 
     const response: CreateTripResponse = { tripId };

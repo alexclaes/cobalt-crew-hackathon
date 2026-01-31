@@ -6,7 +6,7 @@ import AddressInput, { AddressSuggestion } from '@/components/AddressInput';
 import UserSelectionModal from '@/components/UserSelectionModal';
 import MapDisplay, { type Restaurant, type PlaceType, type MapPoint } from '@/components/MapDisplay';
 import { User, UserEntrySchema } from '@/types/user';
-import type { CreateTripRequest, CreateTripResponse } from '@/types/trip';
+import type { CreateTripRequest, CreateTripResponse, TripTheme } from '@/types/trip';
 import { calculateMidpoint, getDefaultRadiusKm, haversineDistanceKm, type Coordinate } from '@/lib/midpoint';
 
 type UserEntry = User & {
@@ -28,6 +28,8 @@ export default function Home() {
   const [enrichmentError, setEnrichmentError] = useState<string | null>(null);
   const [placeTypes, setPlaceTypes] = useState<PlaceType[]>(['restaurant']);
   const lastEnrichedKeyRef = useRef<string | null>(null);
+  const [themes, setThemes] = useState<TripTheme[]>([]);
+  const [selectedThemeId, setSelectedThemeId] = useState<string | null>(null);
 
   const togglePlaceType = (type: PlaceType) => {
     setPlaceTypes((prev) =>
@@ -73,6 +75,19 @@ export default function Home() {
       setRadiusKm(getDefaultRadiusKm(midpoint, coordinatesForRadius));
     }
   }, [midpoint?.lat, midpoint?.lon, coordinatesForRadius.length, usersKey]);
+
+  // Fetch trip themes on component mount
+  useEffect(() => {
+    fetch('/api/trip-themes')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data.themes) && data.themes.length > 0) {
+          setThemes(data.themes);
+          // Do not set a default - user must select
+        }
+      })
+      .catch(err => console.error('Error fetching themes:', err));
+  }, []);
 
   // Fetch places for each selected type in parallel; merge, tag with type, sort by distance
   useEffect(() => {
@@ -220,6 +235,12 @@ export default function Home() {
       return;
     }
 
+    // Validate that a theme is selected
+    if (!selectedThemeId) {
+      alert('Please select a trip theme');
+      return;
+    }
+
     setIsCreatingTrip(true);
 
     try {
@@ -241,6 +262,7 @@ export default function Home() {
       const requestBody: CreateTripRequest = {
         preConfiguredUserIds,
         manualUsers,
+        themeId: selectedThemeId,
       };
 
       const response = await fetch('/api/trips', {
@@ -341,6 +363,32 @@ export default function Home() {
                     + Add Mate Manually
                   </button>
                 </div>
+              </div>
+
+              {/* Theme Selection Dropdown */}
+              <div className="mt-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Trip Theme
+                </label>
+                <select
+                  value={selectedThemeId || ''}
+                  onChange={(e) => setSelectedThemeId(e.target.value || null)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  disabled={themes.length === 0}
+                >
+                  {themes.length === 0 ? (
+                    <option value="">Loading themes...</option>
+                  ) : (
+                    <>
+                      <option value="">Select a theme...</option>
+                      {themes.map((theme) => (
+                        <option key={theme.id} value={theme.id}>
+                          {theme.name}
+                        </option>
+                      ))}
+                    </>
+                  )}
+                </select>
               </div>
 
               {/* Create Trip Button */}
