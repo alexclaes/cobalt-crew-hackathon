@@ -2,9 +2,9 @@
 
 import { useState, useRef, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import AddressInput, { AddressSuggestion } from '@/components/AddressInput';
 import UserSelectionModal from '@/components/UserSelectionModal';
 import AddManualMateModal from '@/components/AddManualMateModal';
+import MateCard from '@/components/MateCard';
 import MapDisplay, { type Restaurant, type PlaceType, type MapPoint } from '@/components/MapDisplay';
 import { User, UserEntrySchema } from '@/types/user';
 import type { CreateTripRequest, CreateTripResponse, TripTheme } from '@/types/trip';
@@ -169,22 +169,6 @@ export default function Home() {
     };
   }, [midpoint?.lat, midpoint?.lon, radiusKm, places, placesLoading]);
 
-  const handleAddressSelect = (userId: string, address: AddressSuggestion) => {
-    setUsers((prev) => {
-      return prev.map((user) => {
-        if (user.id === userId) {
-          return {
-            ...user,
-            address: address.display_name,
-            lat: address.lat,
-            lon: address.lon,
-          };
-        }
-        return user;
-      });
-    });
-  };
-
   const handleRemoveUser = (userId: string) => {
     setUsers((prev) => prev.filter((u) => u.id !== userId));
     // If it's a manual user, decrement the counter
@@ -192,17 +176,6 @@ export default function Home() {
     if (user && !user.isPreConfigured) {
       setManualUserCount((prev) => Math.max(0, prev - 1));
     }
-  };
-
-  const handleNameChange = (userId: string, name: string) => {
-    setUsers((prev) => {
-      return prev.map((user) => {
-        if (user.id === userId) {
-          return { ...user, name };
-        }
-        return user;
-      });
-    });
   };
 
   const handleAddManualMate = (mate: { name: string; address: string; lat: number; lon: number }) => {
@@ -337,18 +310,12 @@ export default function Home() {
                   </div>
                 ) : (
                   users.map((user, index) => (
-                    <AddressInput
+                    <MateCard
                       key={user.id}
-                      userLabel={user.userLabel}
                       userNumber={index + 1}
                       userName={user.name}
                       userAddress={user.address}
-                      onAddressSelect={(address) =>
-                        handleAddressSelect(user.id, address)
-                      }
-                      onNameChange={(name) => handleNameChange(user.id, name)}
                       onRemove={() => handleRemoveUser(user.id)}
-                      isReadOnly={user.isReadOnly}
                     />
                   ))
                 )}
@@ -398,7 +365,7 @@ export default function Home() {
 
               {/* Create Trip Button */}
               <div className="mt-6">
-                {canCalculate ? (
+                {canCalculate && selectedThemeId ? (
                   <button
                     onClick={handleCreateTrip}
                     disabled={isCreatingTrip}
@@ -416,7 +383,9 @@ export default function Home() {
                 ) : (
                   <div className="p-4 bg-yellow-50 rounded-md border border-yellow-200">
                     <div className="text-sm text-yellow-800">
-                      {users.length === 0
+                      {!selectedThemeId
+                        ? 'Please select a trip theme'
+                        : users.length === 0
                         ? 'Add at least two mates'
                         : completeUsers.length === 0
                         ? 'Please complete the information for your mates (name and address)'
