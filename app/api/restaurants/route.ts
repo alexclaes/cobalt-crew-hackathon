@@ -120,14 +120,16 @@ out center;
       if (r) restaurants.push(r);
     }
 
-    // Sort by distance (nearest first); if limited results we already have nearest
+    // Sort by distance (nearest first), then limit to nearest 5 per category
     restaurants.sort((a, b) => {
       const da = haversineDistanceKm(center, { lat: a.lat, lon: a.lon });
       const db = haversineDistanceKm(center, { lat: b.lat, lon: b.lon });
       return da - db;
     });
 
-    return NextResponse.json(restaurants);
+    const MAX_PER_CATEGORY = 5;
+    const limited = restaurants.slice(0, MAX_PER_CATEGORY);
+    return NextResponse.json(limited);
   } catch (e) {
     console.error('Places API error:', e);
     return NextResponse.json(
