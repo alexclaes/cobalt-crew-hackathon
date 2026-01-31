@@ -1,14 +1,13 @@
 'use client';
 
-import { useState, useRef, useMemo, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import UserSelectionModal from '@/components/UserSelectionModal';
 import AddManualMateModal from '@/components/AddManualMateModal';
 import MateCard from '@/components/MateCard';
-import MapDisplay, { type Restaurant, type PlaceType, type MapPoint } from '@/components/MapDisplay';
+import VoiceInput, { type VoiceResult, type BulkVoiceResult } from '@/components/VoiceInput';
 import { User, UserEntrySchema } from '@/types/user';
 import type { CreateTripRequest, CreateTripResponse, TripTheme } from '@/types/trip';
-import { calculateMidpoint, getDefaultRadiusKm, haversineDistanceKm, type Coordinate } from '@/lib/midpoint';
 
 type UserEntry = User & {
   isPreConfigured: boolean;
@@ -23,61 +22,9 @@ export default function Home() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isManualMateModalOpen, setIsManualMateModalOpen] = useState(false);
   const [isCreatingTrip, setIsCreatingTrip] = useState(false);
-  const [showMap, setShowMap] = useState(true);
-  const [radiusKm, setRadiusKm] = useState(50);
-  const [places, setPlaces] = useState<Restaurant[]>([]);
-  const [placesLoading, setPlacesLoading] = useState(false);
-  const [enrichmentLoading, setEnrichmentLoading] = useState(false);
-  const [enrichmentError, setEnrichmentError] = useState<string | null>(null);
-  const [placeTypes, setPlaceTypes] = useState<PlaceType[]>(['restaurant']);
-  const lastEnrichedKeyRef = useRef<string | null>(null);
   const [themes, setThemes] = useState<TripTheme[]>([]);
   const [selectedThemeId, setSelectedThemeId] = useState<string | null>(null);
-
-  const togglePlaceType = (type: PlaceType) => {
-    setPlaceTypes((prev) =>
-      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
-    );
-  };
-
-  // Create a stable key for users to use in useMemo
-  const usersKey = useMemo(() => {
-    return users.map(u => `${u.id}:${u.lat.toFixed(6)},${u.lon.toFixed(6)}`).join('|');
-  }, [users]);
-
-  // Calculate midpoint only when showMap is true - memoize to prevent object recreation
-  const midpoint = useMemo(() => {
-    if (!showMap || users.length < 2) {
-      return null;
-    }
-    const coordinates: Coordinate[] = users.map((user) => ({
-      lat: user.lat,
-      lon: user.lon,
-    }));
-    const result = calculateMidpoint(coordinates);
-    // Return null if calculation failed, otherwise return the result
-    return result;
-  }, [usersKey, showMap, users.length]);
-
-  // Convert users to map points - use stable usersKey
-  const mapPoints: MapPoint[] = useMemo(() => {
-    return users.map((user) => ({
-      lat: user.lat,
-      lon: user.lon,
-      label: user.name,
-    }));
-  }, [usersKey]);
-
-  // Set default radius from trip scale (Germany: small 1 km, mid 15 km, large 50 km) when midpoint/users change
-  const coordinatesForRadius = useMemo(
-    () => users.map((u) => ({ lat: u.lat, lon: u.lon })),
-    [usersKey]
-  );
-  useEffect(() => {
-    if (midpoint && coordinatesForRadius.length >= 2) {
-      setRadiusKm(getDefaultRadiusKm(midpoint, coordinatesForRadius));
-    }
-  }, [midpoint?.lat, midpoint?.lon, coordinatesForRadius.length, usersKey]);
+  const [triggerVoiceInput, setTriggerVoiceInput] = useState(0);
 
   // Fetch trip themes on component mount
   useEffect(() => {
@@ -91,83 +38,6 @@ export default function Home() {
       })
       .catch(err => console.error('Error fetching themes:', err));
   }, []);
-
-  // Fetch places for each selected type in parallel; merge, tag with type, sort by distance
-  useEffect(() => {
-    if (!midpoint || !showMap || placeTypes.length === 0) {
-      setPlaces([]);
-      return;
-    }
-    let cancelled = false;
-    setPlacesLoading(true);
-    const base = `/api/restaurants?lat=${midpoint.lat}&lon=${midpoint.lon}&radiusKm=${radiusKm}`;
-    const center = { lat: midpoint.lat, lon: midpoint.lon };
-    Promise.all(
-      placeTypes.map((type) =>
-        fetch(`${base}&type=${type}`)
-          .then((res) => (res.ok ? res.json() : []))
-          .then((data: { id: string; name: string; lat: number; lon: number; cuisine?: string; priceRange?: string; openingHours?: string }[]) =>
-            (Array.isArray(data) ? data : []).map((p) => ({
-              ...p,
-              type,
-              id: `${type}-${p.id}`,
-            } as Restaurant))
-          )
-          .catch(() => [] as Restaurant[])
-      )
-    )
-      .then((arrays) => {
-        if (cancelled) return;
-        const merged: Restaurant[] = arrays.flat();
-        merged.sort((a, b) => {
-          const da = haversineDistanceKm(center, { lat: a.lat, lon: a.lon });
-          const db = haversineDistanceKm(center, { lat: b.lat, lon: b.lon });
-          return da - db;
-        });
-        setPlaces(merged);
-      })
-      .finally(() => {
-        if (!cancelled) setPlacesLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [midpoint?.lat, midpoint?.lon, radiusKm, showMap, placeTypes.slice().sort().join(',')]);
-
-  // Automatic enrichment: when places load (from Overpass), call OpenAI to add cost, rating, vegan/veg, etc.
-  useEffect(() => {
-    if (!midpoint || places.length === 0 || placesLoading) return;
-    const batchKey = places.map((p) => p.id).sort().join(',');
-    if (batchKey === lastEnrichedKeyRef.current) return;
-    lastEnrichedKeyRef.current = batchKey;
-    let cancelled = false;
-    setEnrichmentLoading(true);
-    setEnrichmentError(null);
-    fetch('/api/enrich-places', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ places, midpoint, radiusKm }),
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error(res.status === 503 ? 'API key not configured' : res.statusText);
-        return res.json();
-      })
-      .then((enriched: Restaurant[]) => {
-        if (!cancelled && Array.isArray(enriched)) {
-          console.log('[Enrich] data from API (merged places from OpenAI):', JSON.stringify(enriched, null, 2));
-          setPlaces(enriched);
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) setEnrichmentError(err instanceof Error ? err.message : 'Could not load details');
-      })
-      .finally(() => {
-        if (!cancelled) setEnrichmentLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [midpoint?.lat, midpoint?.lon, radiusKm, places, placesLoading]);
 
   const handleRemoveUser = (userId: string) => {
     setUsers((prev) => prev.filter((u) => u.id !== userId));
@@ -266,6 +136,159 @@ export default function Home() {
     }
   };
 
+  // Handle bulk voice input results
+  const handleVoiceResult = async (result: VoiceResult) => {
+    if (result.type === 'bulk') {
+      const bulkResult = result as BulkVoiceResult;
+      console.log('[Voice] Bulk result received:', bulkResult);
+
+      // Load pre-configured users from the JSON file
+      let preConfiguredUsers: User[] = [];
+      try {
+        const usersResponse = await fetch('/data/users.json');
+        if (usersResponse.ok) {
+          const usersData = await usersResponse.json();
+          preConfiguredUsers = usersData.users || [];
+        }
+      } catch (error) {
+        console.error('[Voice] Error loading pre-configured users:', error);
+      }
+
+      // Process each mate from voice input
+      const newMates: UserEntry[] = [];
+      const skippedMates: string[] = [];
+      const notFoundMates: string[] = [];
+      
+      for (const mate of bulkResult.mates) {
+        // Check if mate is already in the current users list
+        const alreadyAdded = users.find(
+          u => u.name.toLowerCase() === mate.name.toLowerCase()
+        );
+        
+        if (alreadyAdded) {
+          console.log(`[Voice] Mate "${mate.name}" is already added, skipping`);
+          skippedMates.push(mate.name);
+          continue;
+        }
+
+        // Check if mate exists in pre-configured users (by name, case-insensitive)
+        const preConfiguredMate = preConfiguredUsers.find(
+          u => u.name.toLowerCase() === mate.name.toLowerCase()
+        );
+
+        if (preConfiguredMate) {
+          // Use the pre-configured mate
+          console.log(`[Voice] Found pre-configured mate: ${preConfiguredMate.name}`);
+          newMates.push({
+            ...preConfiguredMate,
+            isPreConfigured: true,
+            userLabel: `User ${users.length + newMates.length + 1}`,
+            isReadOnly: true,
+          });
+        } else {
+          // Not found in pre-configured list
+          // Check if address is just the name (meaning no location was provided)
+          const hasLocation = mate.address.toLowerCase() !== mate.name.toLowerCase();
+          
+          if (!hasLocation) {
+            // No location provided and not in pre-configured list
+            console.warn(`[Voice] No location provided for: ${mate.name}`);
+            notFoundMates.push(`${mate.name} (no location provided)`);
+          } else {
+            // Try to geocode the address
+            try {
+              const geocodeResponse = await fetch(`/api/geocode?q=${encodeURIComponent(mate.address)}`);
+              if (geocodeResponse.ok) {
+                const geocodeData = await geocodeResponse.json();
+                if (geocodeData.results && geocodeData.results.length > 0) {
+                  const firstResult = geocodeData.results[0];
+                  
+                  // Generate unique ID for manual mate
+                  const mateId = `manual-voice-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                  
+                  newMates.push({
+                    id: mateId,
+                    name: mate.name,
+                    address: firstResult.display_name,
+                    lat: firstResult.lat,
+                    lon: firstResult.lon,
+                    isPreConfigured: false,
+                    userLabel: `User ${users.length + newMates.length + 1}`,
+                    isReadOnly: true,
+                  });
+                  
+                  console.log(`[Voice] Successfully added mate via geocoding: ${mate.name} at ${firstResult.display_name}`);
+                } else {
+                  console.warn(`[Voice] No geocoding results for: ${mate.address}`);
+                  notFoundMates.push(`${mate.name} (${mate.address})`);
+                }
+              } else {
+                console.error(`[Voice] Geocoding failed for: ${mate.address}`);
+                notFoundMates.push(`${mate.name} (${mate.address})`);
+              }
+            } catch (error) {
+              console.error(`[Voice] Error processing mate ${mate.name}:`, error);
+              notFoundMates.push(`${mate.name} (${mate.address})`);
+            }
+          }
+        }
+      }
+
+      // Add all successfully processed mates
+      if (newMates.length > 0) {
+        setUsers(prev => [...prev, ...newMates]);
+        console.log(`[Voice] Successfully added ${newMates.length} mate(s)`);
+      }
+      
+      // Only show alert if there are errors (skipped or not found mates)
+      const hasErrors = skippedMates.length > 0 || notFoundMates.length > 0;
+      
+      if (hasErrors) {
+        let errorMessage = '';
+        
+        if (skippedMates.length > 0) {
+          errorMessage += `⚠️ Already added (skipped): ${skippedMates.join(', ')}\n\n`;
+        }
+        
+        if (notFoundMates.length > 0) {
+          errorMessage += `❌ Could not find:\n${notFoundMates.map(name => `• ${name}`).join('\n')}\n\n`;
+          errorMessage += `After pressing OK, voice recording will start automatically.\nPlease provide the missing locations or add them manually later.`;
+        }
+        
+        // Show alert and wait for user to dismiss
+        alert(errorMessage);
+        
+        // After dismissing alert, trigger voice input again if there are mates that need location
+        if (notFoundMates.length > 0) {
+          // Small delay to ensure alert is fully dismissed
+          setTimeout(() => {
+            setTriggerVoiceInput(prev => prev + 1);
+          }, 300);
+        }
+      }
+
+      // Handle theme if provided
+      if (bulkResult.theme && themes.length > 0) {
+        // Find matching theme (case-insensitive)
+        const matchingTheme = themes.find(
+          theme => theme.name.toLowerCase() === bulkResult.theme!.toLowerCase()
+        );
+        
+        if (matchingTheme) {
+          setSelectedThemeId(matchingTheme.id);
+          console.log(`[Voice] Selected theme: ${matchingTheme.name}`);
+        } else {
+          console.warn(`[Voice] Could not match theme: ${bulkResult.theme}`);
+        }
+      }
+    }
+  };
+
+  const handleVoiceError = (error: string) => {
+    console.error('[Voice] Error:', error);
+    // Error is already shown in the VoiceInput component
+  };
+
   const alreadySelectedUserIds = users
     .filter(u => u.isPreConfigured)
     .map(u => u.id);
@@ -287,9 +310,43 @@ export default function Home() {
           <h1 className="text-4xl font-bold text-gray-900 mb-2">
             Plan a Weekend Trip
           </h1>
-          <p className="text-gray-600">
+          <p className="text-gray-600 mb-6">
             Add addresses for each participant to find the perfect meeting point
           </p>
+          
+          {/* Quick Start with Voice */}
+          <div className="mb-6 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border-2 border-blue-200">
+            <div className="flex flex-col items-center gap-3">
+              <div className="text-center">
+                <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                  🎤 Quick Start with Voice
+                </h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Say everyone's name and location, plus trip theme!
+                </p>
+                <p className="text-xs text-gray-500 italic mb-3">
+                  Example: "Add Sarah, Michael from Munich, and Alex. I want a food and drink trip."
+                </p>
+                <p className="text-xs text-gray-500 mb-3">
+                  💡 Tip: If a mate is already in the system, just say their name. Otherwise, include their location.
+                </p>
+              </div>
+              
+              <VoiceInput
+                context="bulk"
+                availableThemes={themes.map(t => t.name)}
+                onResult={handleVoiceResult}
+                onError={handleVoiceError}
+                buttonText="🎙️ Start Voice Input"
+                buttonClassName="px-8 py-4 rounded-xl font-semibold text-lg shadow-lg"
+                triggerRecording={triggerVoiceInput}
+              />
+              
+              <p className="text-xs text-gray-500 mt-2">
+                Works best in Chrome or Edge • Microphone permission required
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* Single Column: Address Inputs */}

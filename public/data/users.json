@@ -2,45 +2,59 @@
   "users": [
     {
       "id": "user1",
-      "name": "Sophie",
+      "name": "Sarah",
       "address": "Alexanderplatz 7, 10178 Berlin, Germany",
       "lat": 52.5219,
       "lon": 13.4132
     },
     {
       "id": "user2",
-      "name": "Lukas",
+      "name": "Michael",
       "address": "Marienplatz 1, 80331 Munich, Germany",
       "lat": 48.1374,
       "lon": 11.5755
     },
     {
       "id": "user3",
-      "name": "Emma",
+      "name": "Julia",
       "address": "Reeperbahn 154, 20359 Hamburg, Germany",
       "lat": 53.5496,
       "lon": 9.9616
     },
     {
       "id": "user4",
-      "name": "Felix",
+      "name": "John",
       "address": "Königsallee 60, 40212 Düsseldorf, Germany",
       "lat": 51.2254,
       "lon": 6.7763
     },
     {
       "id": "user5",
-      "name": "Mia",
+      "name": "Tom",
       "address": "Hauptstraße 142, 69117 Heidelberg, Germany",
       "lat": 49.4093,
       "lon": 8.6937
     },
     {
       "id": "user6",
-      "name": "Jonas",
+      "name": "David",
       "address": "Römerberg 27, 60311 Frankfurt am Main, Germany",
       "lat": 50.1106,
       "lon": 8.6821
+    },
+    {
+      "id": "user7",
+      "name": "Maria",
+      "address": "Holstentorplatz 1, 23552 Lübeck, Germany",
+      "lat": 53.8644,
+      "lon": 10.6722
+    },
+    {
+      "id": "user8",
+      "name": "Alex",
+      "address": "Kamp 11, 33098 Paderborn",
+      "lat": 51.716968,
+      "lon": 8.75392
     }
   ]
 }
