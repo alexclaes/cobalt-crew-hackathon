@@ -1,6 +1,6 @@
 import { neon } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
-import type { Trip } from '@/types/trip';
+import type { Trip, TripTheme } from '@/types/trip';
 
 const sql = neon(process.env.DATABASE_URL!);
 
@@ -20,12 +20,64 @@ export async function GET(
       );
     }
 
-    // Query database for trip
-    const result = await sql`
-      SELECT id, created_at, users
-      FROM trips
-      WHERE id = ${id}
-    `;
+    // Query database for trip with theme information
+    // Try to include all columns, fallback if some don't exist
+    let result;
+    try {
+      result = await sql`
+        SELECT 
+          t.id, 
+          t.created_at, 
+          t.users,
+          t.theme_id,
+          t.recommendation,
+          t.places,
+          t.places_metadata,
+          tt.name as theme_name,
+          tt.icon as theme_icon
+        FROM trips t
+        LEFT JOIN trip_themes tt ON t.theme_id = tt.id
+        WHERE t.id = ${id}
+      `;
+    } catch (err: any) {
+      // If some columns don't exist, query without them
+      if (err?.message?.includes('column')) {
+        try {
+          result = await sql`
+            SELECT 
+              t.id, 
+              t.created_at, 
+              t.users,
+              t.theme_id,
+              t.recommendation,
+              tt.name as theme_name,
+              tt.icon as theme_icon
+            FROM trips t
+            LEFT JOIN trip_themes tt ON t.theme_id = tt.id
+            WHERE t.id = ${id}
+          `;
+        } catch (err2: any) {
+          if (err2?.message?.includes('recommendation')) {
+            result = await sql`
+              SELECT 
+                t.id, 
+                t.created_at, 
+                t.users,
+                t.theme_id,
+                tt.name as theme_name,
+                tt.icon as theme_icon
+              FROM trips t
+              LEFT JOIN trip_themes tt ON t.theme_id = tt.id
+              WHERE t.id = ${id}
+            `;
+          } else {
+            throw err2;
+          }
+        }
+      } else {
+        throw err;
+      }
+    }
 
     if (result.length === 0) {
       return NextResponse.json(
@@ -39,6 +91,15 @@ export async function GET(
       id: row.id,
       createdAt: row.created_at,
       users: row.users,
+      themeId: row.theme_id,
+      theme: row.theme_id ? {
+        id: row.theme_id,
+        name: row.theme_name,
+        icon: row.theme_icon,
+      } : undefined,
+      recommendation: row.recommendation || null,
+      places: row.places || undefined,
+      placesMetadata: row.places_metadata || undefined,
     };
 
     return NextResponse.json(trip);

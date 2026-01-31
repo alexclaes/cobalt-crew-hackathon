@@ -4,9 +4,17 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { useParams } from 'next/navigation';
 import MatesList from '@/components/MatesList';
+import Recommendation from '@/components/Recommendation';
 import { calculateMidpoint, getDefaultRadiusKm, haversineDistanceKm, Coordinate } from '@/lib/midpoint';
 import type { MapPoint, Restaurant, PlaceType } from '@/components/MapDisplay';
 import type { Trip } from '@/types/trip';
+
+function getTripTitle(trip: Trip | null): string {
+  if (!trip || !trip.theme) {
+    return 'Trip Planning';
+  }
+  return `${trip.theme.icon} ${trip.theme.name} Trip Planning`;
+}
 
 // Dynamically import MapDisplay with SSR disabled
 const MapDisplay = dynamic(() => import('@/components/MapDisplay'), {
@@ -33,7 +41,11 @@ export default function TripPage() {
   const [placesLoading, setPlacesLoading] = useState(false);
   const [enrichmentLoading, setEnrichmentLoading] = useState(false);
   const [placeTypes, setPlaceTypes] = useState<PlaceType[]>(['restaurant']);
+  const [recommendation, setRecommendation] = useState<{ place: Restaurant; reasoning?: string } | null>(null);
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [hasNoRecommendation, setHasNoRecommendation] = useState(false);
   const lastEnrichedKeyRef = useRef<string | null>(null);
+  const hasStoredRecommendationRef = useRef(false);
 
   const togglePlaceType = (type: PlaceType) => {
     setPlaceTypes((prev) =>
@@ -61,6 +73,17 @@ export default function TripPage() {
 
         const tripData: Trip = await response.json();
         setTrip(tripData);
+        // Load stored recommendation if it exists
+        if (tripData.recommendation && tripData.recommendation.place) {
+          setRecommendation(tripData.recommendation);
+          setHasNoRecommendation(false);
+          hasStoredRecommendationRef.current = true;
+        } else {
+          setRecommendation(null);
+          setHasNoRecommendation(false);
+          hasStoredRecommendationRef.current = false;
+        }
+        // Places will be loaded by the useEffect that checks metadata
       } catch (err) {
         console.error('Error fetching trip:', err);
         setError('Failed to load trip');
@@ -105,12 +128,31 @@ export default function TripPage() {
   }, [midpoint, trip]);
 
   // Fetch places for each selected type in parallel; merge, tag with type, sort by distance
+  // First check if we have cached places that match current parameters
   useEffect(() => {
-    if (!midpoint || placeTypes.length === 0) {
+    if (!midpoint || placeTypes.length === 0 || !trip) {
       setPlaces([]);
+      setRecommendation(null);
       return;
     }
 
+    // Check if stored places match current parameters
+    const storedMetadata = trip.placesMetadata;
+    const placeTypesStr = placeTypes.slice().sort().join(',');
+    const metadataMatches = storedMetadata &&
+      storedMetadata.midpointLat === midpoint.lat &&
+      storedMetadata.midpointLon === midpoint.lon &&
+      storedMetadata.radiusKm === radiusKm &&
+      storedMetadata.placeTypes?.slice().sort().join(',') === placeTypesStr;
+
+    // If we have matching cached places, use them (no loading spinner)
+    if (metadataMatches && trip.places && Array.isArray(trip.places) && trip.places.length > 0) {
+      setPlaces(trip.places);
+      setPlacesLoading(false);
+      return;
+    }
+
+    // Otherwise, fetch from Overpass API
     let cancelled = false;
     setPlacesLoading(true);
 
@@ -142,10 +184,36 @@ export default function TripPage() {
             haversineDistanceKm(midpoint, { lat: b.lat, lon: b.lon })
         );
         setPlaces(merged);
+        
+        // Save places to database
+        if (tripId && merged.length > 0) {
+          fetch(`/api/trips/${tripId}/places`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              places: merged,
+              placesMetadata: {
+                midpointLat: midpoint.lat,
+                midpointLon: midpoint.lon,
+                radiusKm,
+                placeTypes: placeTypes.slice(),
+              },
+            }),
+          }).catch((err) => {
+            console.error('Error saving places to database:', err);
+          });
+        }
+        
+        // Clear recommendation when places change (unless we have a stored one that matches)
+        if (!hasStoredRecommendationRef.current) {
+          setRecommendation(null);
+          setHasNoRecommendation(false);
+        }
       })
       .catch((err) => {
         console.error('Error fetching places:', err);
         setPlaces([]);
+        setRecommendation(null);
       })
       .finally(() => {
         if (!cancelled) setPlacesLoading(false);
@@ -154,17 +222,23 @@ export default function TripPage() {
     return () => {
       cancelled = true;
     };
-  }, [midpoint?.lat, midpoint?.lon, radiusKm, placeTypes.slice().sort().join(',')]);
+  }, [midpoint?.lat, midpoint?.lon, radiusKm, placeTypes.slice().sort().join(','), trip, tripId]);
 
   // Automatic enrichment: when places load (from Overpass), call OpenAI to add cost, rating, vegan/veg, etc.
   useEffect(() => {
     if (!midpoint || places.length === 0 || placesLoading) return;
+
+    // Skip AI enrichment entirely if we have a stored recommendation (unless regenerating)
+    if (hasStoredRecommendationRef.current && !isRegenerating) {
+      return;
+    }
 
     const batchKey = places.map((p) => p.id).sort().join(',');
     if (lastEnrichedKeyRef.current === batchKey) return;
 
     let cancelled = false;
     setEnrichmentLoading(true);
+    setHasNoRecommendation(false);
 
     fetch('/api/enrich-places', {
       method: 'POST',
@@ -172,14 +246,73 @@ export default function TripPage() {
       body: JSON.stringify({ places, midpoint, radiusKm }),
     })
       .then((r) => r.json())
-      .then((enriched: Restaurant[]) => {
-        if (!cancelled && Array.isArray(enriched)) {
-          setPlaces(enriched);
+      .then((response: { places?: Restaurant[]; recommendation?: { placeId: string; reasoning?: string } | null }) => {
+        if (!cancelled) {
+          if (Array.isArray(response.places)) {
+            setPlaces(response.places);
+            // Save enriched places back to database
+            if (tripId && response.places.length > 0 && midpoint) {
+              fetch(`/api/trips/${tripId}/places`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  places: response.places,
+                  placesMetadata: {
+                    midpointLat: midpoint.lat,
+                    midpointLon: midpoint.lon,
+                    radiusKm,
+                    placeTypes: placeTypes.slice(),
+                  },
+                }),
+              }).catch((err) => {
+                console.error('Error saving enriched places to database:', err);
+              });
+            }
+          }
+          if (response.recommendation && response.recommendation.placeId) {
+            // Find the full place data from enriched places
+            const recommendedPlace = response.places?.find(p => p.id === response.recommendation!.placeId);
+            if (recommendedPlace) {
+              const fullRecommendation = {
+                place: recommendedPlace,
+                reasoning: response.recommendation.reasoning,
+              };
+              setRecommendation(fullRecommendation);
+              setHasNoRecommendation(false);
+              hasStoredRecommendationRef.current = true;
+              // Save full recommendation to database
+              if (tripId) {
+                fetch(`/api/trips/${tripId}/recommendation`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ recommendation: fullRecommendation }),
+                }).catch(err => console.error('Error saving recommendation:', err));
+              }
+            }
+          } else {
+            setRecommendation(null);
+            setHasNoRecommendation(true);
+            hasStoredRecommendationRef.current = false;
+            // Clear recommendation in database
+            if (tripId) {
+              fetch(`/api/trips/${tripId}/recommendation`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ recommendation: null }),
+              }).catch(err => console.error('Error clearing recommendation:', err));
+            }
+          }
           lastEnrichedKeyRef.current = batchKey;
+          setIsRegenerating(false);
         }
       })
       .catch((err) => {
         console.error('Enrichment error:', err);
+        if (!cancelled) {
+          setRecommendation(null);
+          setHasNoRecommendation(true);
+          setIsRegenerating(false);
+        }
       })
       .finally(() => {
         if (!cancelled) setEnrichmentLoading(false);
@@ -188,7 +321,7 @@ export default function TripPage() {
     return () => {
       cancelled = true;
     };
-  }, [midpoint, places.length, placesLoading, places.map((p) => p.id).sort().join(',')]);
+  }, [midpoint?.lat, midpoint?.lon, places.length, placesLoading, places.map((p) => p.id).sort().join(','), isRegenerating, tripId]);
 
   // Loading state
   if (isLoading) {
@@ -270,7 +403,7 @@ export default function TripPage() {
           </a>
           
           <h1 className="text-4xl font-bold text-gray-900 mb-2">
-            Trip Planning
+            {getTripTitle(trip)}
           </h1>
           <p className="text-gray-600">
             View your trip details and the calculated midpoint
@@ -409,14 +542,6 @@ export default function TripPage() {
                     </div>
                   )}
 
-                  {/* Enrichment Loading Indicator */}
-                  {enrichmentLoading && (
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <div className="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
-                      <span>Enriching with AI...</span>
-                    </div>
-                  )}
-
                   {/* Places Count */}
                   {places.length > 0 && !placesLoading && (
                     <div className="text-sm text-gray-600">
@@ -428,8 +553,23 @@ export default function TripPage() {
             </div>
           </div>
 
-          {/* Right Column: Mates List */}
-          <div>
+          {/* Right Column: Recommendation and Mates List */}
+          <div className="space-y-6">
+            <Recommendation
+              recommendedPlace={recommendation?.place || null}
+              midpoint={midpoint}
+              reasoning={recommendation?.reasoning}
+              isLoading={enrichmentLoading || isRegenerating}
+              hasNoRecommendation={hasNoRecommendation}
+              themeIcon={trip?.theme?.icon}
+              onRegenerate={() => {
+                setIsRegenerating(true);
+                setRecommendation(null);
+                setHasNoRecommendation(false);
+                hasStoredRecommendationRef.current = false;
+                lastEnrichedKeyRef.current = null; // Force regeneration
+              }}
+            />
             <MatesList users={trip.users} />
           </div>
         </div>
