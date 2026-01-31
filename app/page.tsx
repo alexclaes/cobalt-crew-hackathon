@@ -23,7 +23,8 @@ export default function Home() {
   const [addresses, setAddresses] = useState<
     Array<{ userLabel: string; address: AddressSuggestion }>
   >([]);
-  const [userCount, setUserCount] = useState(2); // Start with 2 users
+  const [userNames, setUserNames] = useState<Record<string, string>>({});
+  const [userCount, setUserCount] = useState(1); // Start with 1 user
   const [showMap, setShowMap] = useState(false);
   const [radiusKm, setRadiusKm] = useState(50); // default; updated from trip scale when map is shown
 
@@ -51,9 +52,9 @@ export default function Home() {
     return addresses.map((addr) => ({
       lat: addr.address.lat,
       lon: addr.address.lon,
-      label: addr.userLabel,
+      label: userNames[addr.userLabel] || addr.userLabel,
     }));
-  }, [addressesKey]);
+  }, [addressesKey, userNames]);
 
   // Set default radius from trip scale (Germany: small 1 km, mid 15 km, large 50 km) when midpoint/addresses change
   const coordinatesForRadius = useMemo(
@@ -83,6 +84,13 @@ export default function Home() {
 
   const handleRemoveAddress = (userLabel: string) => {
     setAddresses((prev) => prev.filter((a) => a.userLabel !== userLabel));
+  };
+
+  const handleNameChange = (userLabel: string, name: string) => {
+    setUserNames((prev) => ({
+      ...prev,
+      [userLabel]: name,
+    }));
   };
 
   const handleAddUser = () => {
@@ -127,9 +135,12 @@ export default function Home() {
                     <AddressInput
                       key={userLabel}
                       userLabel={userLabel}
+                      userNumber={i + 1}
+                      userName={userNames[userLabel] || ''}
                       onAddressSelect={(address) =>
                         handleAddressSelect(userLabel, address)
                       }
+                      onNameChange={(name) => handleNameChange(userLabel, name)}
                       onRemove={() => handleRemoveAddress(userLabel)}
                     />
                   );
@@ -141,7 +152,7 @@ export default function Home() {
                     onClick={handleAddUser}
                     className="w-full py-2 px-4 border-2 border-dashed border-gray-300 rounded-md text-gray-600 hover:border-blue-500 hover:text-blue-600 transition-colors"
                   >
-                    + Add {nextUserLabel}
+                    + Add User
                   </button>
                 )}
               </div>
