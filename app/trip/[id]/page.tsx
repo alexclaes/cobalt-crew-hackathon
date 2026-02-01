@@ -9,9 +9,26 @@ import { FloatingStickers } from '@/components/FloatingStickers';
 import MatesList from '@/components/MatesList';
 import Recommendation from '@/components/Recommendation';
 import { calculateMidpoint, getDefaultRadiusKm, haversineDistanceKm, Coordinate } from '@/lib/midpoint';
-import type { MapPoint, Restaurant, PlaceType } from '@/components/MapDisplay';
+import type { MapPoint, Restaurant } from '@/components/MapDisplay';
 import type { Trip } from '@/types/trip';
-import { getPlaceTypesForTheme } from '@/lib/theme-place-types';
+import { getPlaceTypesForTheme, type PlaceType } from '@/lib/theme-place-types';
+
+const categoryLabels: Partial<Record<PlaceType, string>> = {
+  restaurant: 'restaurants',
+  bar: 'bars',
+  hotel: 'hotels',
+  camping: 'camping sites',
+  hostel: 'hostels',
+  shop: 'shops',
+  museum: 'museums',
+  theatre: 'theatres',
+  spa: 'spas',
+  'natural formations': 'natural formations',
+  'brewery map': 'breweries',
+  historic: 'historic sites',
+  elevation: 'elevation points',
+  'dog map': 'dog parks',
+};
 
 function getTripTitle(trip: Trip | null): React.ReactElement {
   if (!trip || !trip.theme) {
@@ -57,11 +74,12 @@ export default function TripPage() {
     if (!trip?.theme?.name) return ['restaurant', 'bar', 'hotel'] as PlaceType[];
     return getPlaceTypesForTheme(trip.theme.name);
   }, [trip?.theme?.name]);
-  const [recommendations, setRecommendations] = useState<Record<string, { current: { place: Restaurant; reasoning?: string } | null; previous: { place: Restaurant; reasoning?: string } | null }>>({});
+  const [recommendations, setRecommendations] = useState<Record<string, { current: { place: Restaurant | null; reasoning?: string } | null; previous: { place: Restaurant | null; reasoning?: string } | null }>>({});
   const [isRegenerating, setIsRegenerating] = useState<PlaceType | null>(null);
   const [hasNoRecommendation, setHasNoRecommendation] = useState(false);
   const lastEnrichedKeyRef = useRef<string | null>(null);
   const hasStoredRecommendationsRef = useRef<Set<PlaceType>>(new Set());
+  const previousPlacesIdsRef = useRef<string>('');
 
   // Place types are now always all three - no toggle needed
 
@@ -93,6 +111,121 @@ export default function TripPage() {
           for (const category in tripData.recommendation) {
             if (tripData.recommendation[category]?.current) {
               hasStoredRecommendationsRef.current.add(category as PlaceType);
+            }
+          }
+          
+          // Get theme place types
+          const themePlaceTypes = tripData.theme?.name 
+            ? getPlaceTypesForTheme(tripData.theme.name)
+            : ['restaurant', 'bar', 'hotel'] as PlaceType[];
+          
+          // If we have cached places, create "no locations found" recommendations for categories without places
+          if (tripData.places && Array.isArray(tripData.places) && tripData.places.length > 0) {
+            const placeTypesWithoutPlaces = themePlaceTypes.filter(type => 
+              !(tripData.places?.some((p: Restaurant) => p.type === type) ?? false)
+            );
+            // Create "no locations found" recommendations for categories without places that don't have recommendations
+            // Batch all updates into a single state update to avoid infinite loops
+            const categoriesToCreate: PlaceType[] = [];
+            for (const category of placeTypesWithoutPlaces) {
+              if (!hasStoredRecommendationsRef.current.has(category)) {
+                hasStoredRecommendationsRef.current.add(category);
+                categoriesToCreate.push(category);
+                // Save to database
+                if (tripId) {
+                  const categoryLabel = categoryLabels[category] || category;
+                  fetch(`/api/trips/${tripId}/recommendation`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      recommendation: {
+                        place: null,
+                        reasoning: `No recommendation available for ${categoryLabel} at this time.\n\nPlease try adjusting your search criteria or radius.`,
+                      },
+                      category
+                    }),
+                  }).catch(err => console.error(`Error saving ${category} no-locations recommendation:`, err));
+                }
+              }
+            }
+            // Batch update state once for all categories
+            if (categoriesToCreate.length > 0) {
+              setRecommendations((prev) => {
+                const updated = { ...prev };
+                for (const category of categoriesToCreate) {
+                  const categoryLabel = categoryLabels[category] || category;
+                  updated[category] = {
+                    current: {
+                      place: null as Restaurant | null,
+                      reasoning: `No recommendation available for ${categoryLabel} at this time.\n\nPlease try adjusting your search criteria or radius.`,
+                    },
+                    previous: null,
+                  };
+                }
+                return updated;
+              });
+            }
+            
+            const batchKey = tripData.places.map((p) => p.id).sort().join(',');
+            // Check if all place types (both with and without places) have recommendations
+            const placeTypesWithPlaces = themePlaceTypes.filter(type => 
+              tripData.places?.some((p: Restaurant) => p.type === type) ?? false
+            );
+            const allTypesWithPlacesHaveRecommendations = placeTypesWithPlaces.length === 0 || 
+              placeTypesWithPlaces.every(type => hasStoredRecommendationsRef.current.has(type));
+            const allTypesWithoutPlacesHaveRecommendations = placeTypesWithoutPlaces.length === 0 || 
+              placeTypesWithoutPlaces.every(type => hasStoredRecommendationsRef.current.has(type));
+            const allTypesHaveRecommendations = allTypesWithPlacesHaveRecommendations && allTypesWithoutPlacesHaveRecommendations;
+            if (allTypesHaveRecommendations) {
+              lastEnrichedKeyRef.current = batchKey;
+            }
+          } else {
+            // No places at all - create "no locations found" recommendations for all theme types that don't have recommendations
+            // Batch all updates into a single state update to avoid infinite loops
+            const categoriesToCreate: PlaceType[] = [];
+            for (const category of themePlaceTypes) {
+              if (!hasStoredRecommendationsRef.current.has(category)) {
+                hasStoredRecommendationsRef.current.add(category);
+                categoriesToCreate.push(category);
+                // Save to database
+                if (tripId) {
+                  const categoryLabel = categoryLabels[category] || category;
+                  fetch(`/api/trips/${tripId}/recommendation`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      recommendation: {
+                        place: null,
+                        reasoning: `No recommendation available for ${categoryLabel} at this time.\n\nPlease try adjusting your search criteria or radius.`,
+                      },
+                      category
+                    }),
+                  }).catch(err => console.error(`Error saving ${category} no-locations recommendation:`, err));
+                }
+              }
+            }
+            // Batch update state once for all categories
+            if (categoriesToCreate.length > 0) {
+              setRecommendations((prev) => {
+                const updated = { ...prev };
+                for (const category of categoriesToCreate) {
+                  const categoryLabel = categoryLabels[category] || category;
+                  updated[category] = {
+                    current: {
+                      place: null as Restaurant | null,
+                      reasoning: `No recommendation available for ${categoryLabel} at this time.\n\nPlease try adjusting your search criteria or radius.`,
+                    },
+                    previous: null,
+                  };
+                }
+                return updated;
+              });
+            }
+            // Check if all theme types have recommendations (including "no locations found")
+            const allTypesHaveRecommendations = themePlaceTypes.length === 0 || 
+              themePlaceTypes.every(type => hasStoredRecommendationsRef.current.has(type));
+            if (allTypesHaveRecommendations) {
+              lastEnrichedKeyRef.current = 'no-places';
             }
           }
         } else {
@@ -180,6 +313,17 @@ export default function TripPage() {
     if (metadataMatches && trip.places && Array.isArray(trip.places) && trip.places.length > 0) {
       setPlaces(trip.places);
       setPlacesLoading(false);
+      // Set lastEnrichedKeyRef to prevent re-enrichment if we have cached places and recommendations
+      const batchKey = trip.places.map((p) => p.id).sort().join(',');
+      // Only set if we have recommendations for all place types that have places (prevents unnecessary enrichment)
+      const placeTypesWithPlaces = placeTypes.filter(type => 
+        trip.places?.some(p => p.type === type) ?? false
+      );
+      const allTypesWithPlacesHaveRecommendations = placeTypesWithPlaces.length > 0 && 
+        placeTypesWithPlaces.every(type => hasStoredRecommendationsRef.current.has(type));
+      if (allTypesWithPlacesHaveRecommendations) {
+        lastEnrichedKeyRef.current = batchKey;
+      }
       return;
     }
 
@@ -238,22 +382,109 @@ export default function TripPage() {
     return () => {
       cancelled = true;
     };
-  }, [midpoint?.lat, midpoint?.lon, fetchRadiusKm, placeTypes.slice().sort().join(','), trip, tripId]);
+  }, [midpoint?.lat, midpoint?.lon, fetchRadiusKm, placeTypes.slice().sort().join(','), trip, tripId, places.length, placesLoading, isRegenerating, isLoading]);
 
   // Automatic enrichment: when places load (from Overpass), call OpenAI to add cost, rating, vegan/veg, etc.
   useEffect(() => {
-    if (!midpoint || places.length === 0 || placesLoading) return;
+    if (!midpoint || places.length === 0 || placesLoading || !trip || isLoading) {
+      setEnrichmentLoading(false); // Ensure loading state is cleared
+      return;
+    }
+    
+    // Compute batch key and check if places actually changed
+    const currentPlacesIds = places.map((p) => p.id).sort().join(',');
+    const batchKey = currentPlacesIds;
+    
+    // Early check: if we already processed this batch, skip
+    if (previousPlacesIdsRef.current === batchKey && lastEnrichedKeyRef.current === batchKey) {
+      setEnrichmentLoading(false); // Ensure loading state is cleared
+      return;
+    }
+    
+    // Update ref to track current places
+    previousPlacesIdsRef.current = batchKey;
 
-    // Skip AI enrichment for categories that have stored recommendations (unless regenerating that category)
-    const needsEnrichment = placeTypes.some(type =>
-      !hasStoredRecommendationsRef.current.has(type) || isRegenerating === type
+    // Identify place types with and without places
+    const placeTypesWithPlaces = placeTypes.filter(type => 
+      places.some(p => p.type === type)
     );
-    if (!needsEnrichment && !isRegenerating) {
+    const placeTypesWithoutPlaces = placeTypes.filter(type => 
+      !places.some(p => p.type === type)
+    );
+    
+    // Handle categories without places FIRST: create "no locations found" recommendations
+    // Only create if they don't already exist in the database
+    // This must happen BEFORE checking if enrichment is needed, to prevent unnecessary API calls
+    if (placeTypesWithoutPlaces.length > 0) {
+      const categoriesNeedingNoLocationRec = placeTypesWithoutPlaces.filter(type => 
+        !hasStoredRecommendationsRef.current.has(type)
+      );
+      if (categoriesNeedingNoLocationRec.length > 0) {
+        // Create "no locations found" recommendations synchronously by updating the ref immediately
+        for (const category of categoriesNeedingNoLocationRec) {
+          const categoryLabel = categoryLabels[category] || category;
+          hasStoredRecommendationsRef.current.add(category);
+          // Save to database
+          if (tripId) {
+            fetch(`/api/trips/${tripId}/recommendation`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                recommendation: {
+                  place: null,
+                  reasoning: `No recommendation available for ${categoryLabel} at this time.\n\nPlease try adjusting your search criteria or radius.`,
+                },
+                category
+              }),
+            }).catch(err => console.error(`Error saving ${category} no-locations recommendation:`, err));
+          }
+        }
+        // Update state (async, but ref is already updated)
+        setRecommendations((prev) => {
+          const updated = { ...prev };
+          for (const category of categoriesNeedingNoLocationRec) {
+            const categoryLabel = categoryLabels[category] || category;
+            updated[category] = {
+              current: {
+                place: null as Restaurant | null,
+                reasoning: `No recommendation available for ${categoryLabel} at this time.\n\nPlease try adjusting your search criteria or radius.`,
+              },
+              previous: null,
+            };
+          }
+          return updated;
+        });
+      }
+    }
+    
+    // NOW check if we have stored recommendations for all place types (both with and without places)
+    // Use the ref (which is updated immediately) rather than state (which is async)
+    const allTypesWithPlacesHaveRecommendations = placeTypesWithPlaces.length === 0 || 
+      placeTypesWithPlaces.every(type => hasStoredRecommendationsRef.current.has(type));
+    const allTypesWithoutPlacesHaveRecommendations = placeTypesWithoutPlaces.length === 0 || 
+      placeTypesWithoutPlaces.every(type => hasStoredRecommendationsRef.current.has(type));
+    const allTypesHaveRecommendations = allTypesWithPlacesHaveRecommendations && allTypesWithoutPlacesHaveRecommendations;
+    
+    // If all types (with and without places) are covered, skip enrichment
+    // We check the ref which is updated immediately, not state which is async
+    if (allTypesHaveRecommendations && !isRegenerating) {
+      // All place types have stored recommendations, no need to call API
+      lastEnrichedKeyRef.current = batchKey; // Mark as processed to prevent future calls
+      setEnrichmentLoading(false); // Ensure loading state is cleared
       return;
     }
 
-    const batchKey = places.map((p) => p.id).sort().join(',');
-    if (lastEnrichedKeyRef.current === batchKey) return;
+    // Skip AI enrichment for categories that have stored recommendations (unless regenerating that category)
+    // Only check place types that actually have places in the dataset
+    const needsEnrichment = placeTypesWithPlaces.some(type =>
+      !hasStoredRecommendationsRef.current.has(type) || isRegenerating === type
+    );
+    if (!needsEnrichment && !isRegenerating) {
+      // All place types that have places have stored recommendations, no need to call API
+      lastEnrichedKeyRef.current = batchKey; // Mark as processed to prevent future calls
+      setEnrichmentLoading(false); // Ensure loading state is cleared
+      return;
+    }
 
     let cancelled = false;
     setEnrichmentLoading(true);
@@ -361,7 +592,7 @@ export default function TripPage() {
     return () => {
       cancelled = true;
     };
-  }, [midpoint?.lat, midpoint?.lon, places.length, placesLoading, places.map((p) => p.id).sort().join(','), isRegenerating, tripId, placeTypes]);
+  }, [midpoint?.lat, midpoint?.lon, places.length, placesLoading, isRegenerating, tripId, placeTypes.slice().sort().join(',')]);
 
   // Loading state
   if (isLoading) {
@@ -479,7 +710,7 @@ export default function TripPage() {
                   recommendedPlaceIds={new Set(
                     Object.values(recommendations)
                       .filter(rec => rec?.current?.place?.id)
-                      .map(rec => rec!.current!.place.id)
+                      .map(rec => rec!.current!.place!.id)
                   )}
                 />
               ) : (

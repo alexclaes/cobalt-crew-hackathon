@@ -1,8 +1,16 @@
 import { neon } from '@neondatabase/serverless';
 import { NextRequest, NextResponse } from 'next/server';
 import type { CategoryRecommendation } from '@/types/trip';
+import type { PlaceType } from '@/lib/theme-place-types';
 
 const sql = neon(process.env.DATABASE_URL!);
+
+// Valid place types for validation
+const VALID_PLACE_TYPES: PlaceType[] = [
+  'restaurant', 'bar', 'hotel', 'camping', 'hostel', 'shop',
+  'museum', 'theatre', 'spa', 'natural formations', 'brewery map',
+  'historic', 'elevation', 'dog map'
+];
 
 export async function PUT(
   request: NextRequest,
@@ -23,9 +31,9 @@ export async function PUT(
     }
 
     // Validate category if provided
-    if (category && !['restaurant', 'bar', 'hotel'].includes(category)) {
+    if (category && !VALID_PLACE_TYPES.includes(category as PlaceType)) {
       return NextResponse.json(
-        { error: 'Invalid category. Must be restaurant, bar, or hotel' },
+        { error: `Invalid category. Must be one of: ${VALID_PLACE_TYPES.join(', ')}` },
         { status: 400 }
       );
     }
@@ -42,11 +50,7 @@ export async function PUT(
       SELECT recommendation FROM trips WHERE id = ${id}
     `;
     
-    let currentRecommendations: {
-      restaurant?: CategoryRecommendation;
-      bar?: CategoryRecommendation;
-      hotel?: CategoryRecommendation;
-    } = {};
+    let currentRecommendations: Record<string, CategoryRecommendation> = {};
     
     if (result.length > 0 && result[0].recommendation) {
       currentRecommendations = result[0].recommendation;
@@ -58,7 +62,7 @@ export async function PUT(
         current: recommendation,
         previous: null, // History removed - always null
       };
-      currentRecommendations[category as keyof typeof currentRecommendations] = newCategoryRec;
+      currentRecommendations[category] = newCategoryRec;
     } else if (!category) {
       // If no category, replace entire recommendations object
       currentRecommendations = recommendation || {};

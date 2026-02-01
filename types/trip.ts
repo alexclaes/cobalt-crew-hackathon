@@ -36,8 +36,8 @@ import type { Restaurant } from '@/components/MapDisplay';
 
 // Recommendation structure for a single category
 export interface CategoryRecommendation {
-  current: { place: Restaurant; reasoning?: string } | null;
-  previous: { place: Restaurant; reasoning?: string } | null;
+  current: { place: Restaurant | null; reasoning?: string } | null;
+  previous: { place: Restaurant | null; reasoning?: string } | null;
 }
 
 // Complete trip data structure

@@ -168,7 +168,7 @@ out center;
         const tags = el.tags ?? {};
         let placeType: PlaceType | null = null;
         
-        // Determine type from OSM tags (check in order of specificity)
+        // Determine type from OSM tags (check in order of specificity - most specific first)
         if (tags.amenity === 'restaurant') placeType = 'restaurant';
         else if (tags.amenity === 'bar') placeType = 'bar';
         else if (tags.tourism === 'hotel') placeType = 'hotel';
@@ -178,10 +178,10 @@ out center;
         else if (tags.tourism === 'museum') placeType = 'museum';
         else if (tags.amenity === 'theatre') placeType = 'theatre';
         else if (tags.leisure === 'spa' || tags.amenity === 'spa') placeType = 'spa';
-        else if (tags.natural) placeType = 'natural formations';
         else if (tags.amenity === 'brewery') placeType = 'brewery map';
         else if (tags.tourism === 'historic') placeType = 'historic';
-        else if (tags.natural === 'peak') placeType = 'elevation';
+        else if (tags.natural === 'peak') placeType = 'elevation'; // Check specific natural=peak BEFORE general natural
+        else if (tags.natural) placeType = 'natural formations'; // General natural check comes after specific checks
         else if (tags.amenity === 'dog_park') placeType = 'dog map';
         
         if (placeType && requestedTypes.includes(placeType)) {

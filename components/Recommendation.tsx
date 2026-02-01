@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { RefreshCw, ChevronRight, ExternalLink } from 'lucide-react';
 import type { Restaurant } from './MapDisplay';
 import type { CategoryRecommendation } from '@/types/trip';
@@ -175,10 +175,20 @@ export default function Recommendation({
     }
   }
 
-  // Set initial active tab to first available category
-  if (availableCategories.length > 0 && !availableCategories.includes(activeTab)) {
-    setActiveTab(availableCategories[0]);
-  }
+  // Set initial active tab to first available category (use useEffect to avoid state updates during render)
+  useEffect(() => {
+    const available: PlaceType[] = [];
+    for (const type of selectedPlaceTypes) {
+      const hasRecommendation = recommendations?.[type]?.current !== null;
+      const isSelected = selectedPlaceTypes.includes(type);
+      if (hasRecommendation || isSelected) {
+        available.push(type);
+      }
+    }
+    if (available.length > 0 && !available.includes(activeTab)) {
+      setActiveTab(available[0]);
+    }
+  }, [selectedPlaceTypes, recommendations, activeTab]);
 
   const currentRecommendation = recommendations?.[activeTab]?.current;
   const showLoading = isLoading || placesLoading;
@@ -263,16 +273,37 @@ export default function Recommendation({
         </div>
       ) : !showLoading && currentRecommendation ? (
         <div>
-          <PlaceDetails
-            place={currentRecommendation.place}
-            midpoint={midpoint}
-            reasoning={currentRecommendation.reasoning}
-          />
+          {currentRecommendation.place ? (
+            <PlaceDetails
+              place={currentRecommendation.place}
+              midpoint={midpoint}
+              reasoning={currentRecommendation.reasoning}
+            />
+          ) : <div className="text-center py-8">
+          <div className="bg-[#ffe135]/30 border-[2px] border-[#ffe135] rounded-lg p-6">
+            <p className="text-black/70 font-mono text-sm mb-2">
+              No recommendation available for {categoryLabels[activeTab]?.toLowerCase() || activeTab}{' '}
+              at this time.
+            </p>
+            <p className="text-xs text-black/50 font-mono mb-4">
+              Please try adjusting your search criteria or radius.
+            </p>
+            {onRegenerate && (
+              <button
+                onClick={() => onRegenerate(activeTab)}
+                className="px-4 py-2 bg-[#ff1493] text-white rounded-lg font-mono font-bold border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+              >
+                Regenerate Recommendation
+              </button>
+            )}
+          </div>
+          </div>
+          }
 
           {/* Other Options Overview */}
-          {(() => {
+          {currentRecommendation.place && (() => {
             const otherPlaces = places
-              .filter((p) => p.type === activeTab && p.id !== currentRecommendation.place.id)
+              .filter((p) => p.type === activeTab && p.id !== currentRecommendation.place?.id)
               .slice(0, 4);
 
             if (otherPlaces.length > 0) {
