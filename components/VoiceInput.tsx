@@ -11,6 +11,7 @@ interface MateData {
 export interface BulkVoiceResult {
   type: 'bulk';
   mates: MateData[];
+  removals: string[];
   theme: string | null;
 }
 

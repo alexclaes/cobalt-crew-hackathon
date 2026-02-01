@@ -101,6 +101,7 @@ export function useVoiceInput({
 
       // Extract data using Gemini
       setState('processing');
+      console.log('[Voice Hook] Sending to extract API:', { transcription, context, availableThemes });
       const extractResponse = await fetch('/api/extract-voice-data', {
         method: 'POST',
         headers: {

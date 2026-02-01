@@ -88,11 +88,11 @@ export function VoiceSection({
             : "Ready for next voice input";
         }
         // Show example only if never recorded before
-        return 'Example: "Add Sarah, Michael from Munich, and Alex. I want a food and drink trip."';
+        return 'Example: "Plan a nature trip with Sarah, Maria and Max from Paris"';
       default:
         return hasRecordedOnce
           ? "Ready for next voice input"
-          : 'Example: "Add Sarah, Michael from Munich, and Alex. I want a food and drink trip."';
+          : 'Example: "Plan a nature trip with Sarah, Maria and Max from Paris"';
     }
   };
 
@@ -110,11 +110,10 @@ export function VoiceSection({
 
         {/* Dynamic status message */}
         <p
-          className={`font-mono text-xs text-center italic min-h-[32px] flex items-center justify-center ${
-            state === "error"
-              ? "text-red-600 font-semibold"
-              : "text-black/70"
-          }`}
+          className={`font-mono text-xs text-center italic min-h-[32px] flex items-center justify-center ${state === "error"
+            ? "text-red-600 font-semibold"
+            : "text-black/70"
+            }`}
         >
           {getStatusMessage()}
         </p>
