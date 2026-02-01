@@ -42,11 +42,16 @@ export default function Home() {
       });
     },
     onThemeSelected: setSelectedThemeId,
+    onUserRemoved: removeUser,
   });
 
   const handleVoiceResult = async (result: VoiceResult) => {
+    console.log('[Home Page] Voice result received:', result);
     if (result.type === 'bulk') {
+      console.log('[Home Page] Processing bulk result');
       await processVoiceResult(result);
+    } else {
+      console.log('[Home Page] Ignoring non-bulk result, type:', result.type);
     }
   };
 

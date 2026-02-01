@@ -14,6 +14,7 @@ interface UseVoiceProcessingProps {
   themes: TripTheme[];
   onUsersAdded: (newUsers: UserEntry[]) => void;
   onThemeSelected: (themeId: string) => void;
+  onUserRemoved: (userId: string) => void;
 }
 
 export function useVoiceProcessing({
@@ -21,6 +22,7 @@ export function useVoiceProcessing({
   themes,
   onUsersAdded,
   onThemeSelected,
+  onUserRemoved,
 }: UseVoiceProcessingProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [triggerRecording, setTriggerRecording] = useState(0);
@@ -159,6 +161,37 @@ export function useVoiceProcessing({
           setTimeout(() => {
             setTriggerRecording((prev) => prev + 1);
           }, 300);
+        }
+      }
+
+      // Handle removals if provided
+      if (result.removals && result.removals.length > 0) {
+        console.log('[Voice] Processing removals:', result.removals);
+        
+        const removedNames: string[] = [];
+        const notFoundForRemoval: string[] = [];
+        
+        for (const nameToRemove of result.removals) {
+          const mateName = nameToRemove.toLowerCase().trim();
+          
+          // Find first matching mate (case-insensitive)
+          const mateToRemove = users.find(
+            (user) => user.name.toLowerCase() === mateName
+          );
+          
+          if (mateToRemove) {
+            onUserRemoved(mateToRemove.id);
+            removedNames.push(mateToRemove.name);
+            console.log(`[Voice] Removed: ${mateToRemove.name}`);
+          } else {
+            notFoundForRemoval.push(nameToRemove);
+            console.warn(`[Voice] Mate not found for removal: ${nameToRemove}`);
+          }
+        }
+        
+        // Only show alert for errors
+        if (notFoundForRemoval.length > 0) {
+          alert(`⚠️ Could not find to remove: ${notFoundForRemoval.join(', ')}`);
         }
       }
 

@@ -11,6 +11,7 @@ interface MateData {
 export interface BulkVoiceResult {
   type: 'bulk';
   mates: MateData[];
+  removals: string[];
   theme: string | null;
 }
 
@@ -53,6 +54,7 @@ export default function VoiceInput({
     transcript,
     errorMessage,
     isSupported,
+    recordingDuration,
     startListening,
     stopListening,
   } = useVoiceInput({
@@ -63,44 +65,76 @@ export default function VoiceInput({
     triggerRecording,
   });
 
-  const isListening = state === 'listening';
+  const isRecording = state === 'recording';
+
+  // Format recording duration as MM:SS
+  const formatDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
 
   return (
     <div className="flex flex-col items-center gap-2">
       <VoiceButton
         state={state}
-        onClick={isListening ? stopListening : startListening}
+        onClick={isRecording ? stopListening : startListening}
         disabled={disabled}
         buttonText={buttonText}
         buttonClassName={buttonClassName}
       />
 
-      {/* Recording hint */}
-      {state === 'listening' && (
-        <div className="text-sm text-gray-600 max-w-md text-center animate-pulse">
-          🎙️ Speak now or click the button to stop
+      {/* Recording hint with timer */}
+      {state === 'recording' && (
+        <div className="flex flex-col items-center gap-1">
+          <div className="text-sm text-red-600 font-semibold animate-pulse">
+            🔴 Recording... {formatDuration(recordingDuration)}
+          </div>
+          <div className="text-xs text-gray-500">
+            Click the button to stop (max 2:00)
+          </div>
         </div>
       )}
 
-      {/* Transcript preview */}
-      {transcript && state === 'processing' && (
-        <div className="text-sm text-gray-600 italic max-w-md text-center">
-          "{transcript}"
+      {/* Uploading state */}
+      {state === 'uploading' && (
+        <div className="text-sm text-blue-600 max-w-md text-center">
+          ⬆️ Uploading audio...
+        </div>
+      )}
+
+      {/* Transcribing state */}
+      {state === 'transcribing' && (
+        <div className="text-sm text-blue-600 max-w-md text-center">
+          ✍️ Transcribing with Whisper...
+        </div>
+      )}
+
+      {/* Processing state with transcript */}
+      {state === 'processing' && (
+        <div className="flex flex-col items-center gap-1">
+          <div className="text-sm text-blue-600">
+            🤖 Extracting data...
+          </div>
+          {transcript && (
+            <div className="text-xs text-gray-600 italic max-w-md text-center">
+              "{transcript.substring(0, 100)}{transcript.length > 100 ? '...' : ''}"
+            </div>
+          )}
         </div>
       )}
 
       {/* Error message */}
       {errorMessage && state === 'error' && (
         <div className="text-sm text-red-600 max-w-md text-center">
-          {errorMessage}
+          ❌ {errorMessage}
         </div>
       )}
 
       {/* Browser not supported message */}
       {!isSupported && state === 'idle' && (
         <div className="text-sm text-orange-600 max-w-md text-center">
-          Voice input is not supported in this browser. Please use Chrome or Edge
-          for the best experience.
+          ⚠️ Voice input is not supported in this browser. Please use a modern browser.
         </div>
       )}
     </div>

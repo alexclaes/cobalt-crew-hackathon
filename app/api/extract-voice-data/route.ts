@@ -20,6 +20,7 @@ interface MateData {
 interface BulkResponse {
   type: 'bulk';
   mates: MateData[];
+  removals: string[];
   theme: string | null;
 }
 
@@ -55,6 +56,8 @@ export async function POST(request: NextRequest) {
 
   const { transcription, context, availableThemes } = body;
 
+  console.log('[Voice API] Request received:', { transcription, context });
+
   // Validate required fields
   if (!transcription || typeof transcription !== 'string' || transcription.trim().length === 0) {
     return NextResponse.json(
@@ -75,7 +78,7 @@ export async function POST(request: NextRequest) {
     let responseType: 'bulk' | 'mate' | 'theme' = context;
 
     if (context === 'bulk') {
-      // Extract multiple mates + theme
+      // Extract multiple mates + removals + theme
       const themes = availableThemes || [
         'City Exploration',
         'Food & Drink',
@@ -87,27 +90,47 @@ export async function POST(request: NextRequest) {
         'Shopping',
       ];
 
-      prompt = `Extract all people and the trip theme from this text: "${transcription}"
+      prompt = `Extract people to ADD, people to REMOVE, and the trip theme from this text: "${transcription}"
 
 Available themes: ${themes.join(', ')}
 
 Return JSON with this EXACT structure:
 {
   "mates": [
-    { "name": "person name", "address": "location/city" },
     { "name": "person name", "address": "location/city" }
   ],
+  "removals": ["person name to remove"],
   "theme": "exact theme name from list above or null"
 }
 
-Instructions:
-- Extract ALL people mentioned with their names
-- For addresses, extract the city, location, or full address mentioned if specified
-- If NO location is mentioned for a person, use just their name as the address (e.g., {"name": "Sarah", "address": "Sarah"})
-- If a city/country is mentioned, use that as the address
-- Match theme using keywords or synonyms (e.g., "food", "dining", "restaurants" → "Food & Drink")
-- If theme is not mentioned or unclear, set it to null
-- Always return valid JSON`;
+Instructions for ADDING mates:
+- Extract people with "add", "include", or no command word (e.g., "John from Berlin")
+- For addresses, extract the city, location, or full address mentioned
+- If NO location mentioned, use just their name as the address (e.g., {"name": "Sarah", "address": "Sarah"})
+- Examples: 
+  * "Add Sarah from Munich" → mates: [{"name": "Sarah", "address": "Munich"}]
+  * "John from Berlin" → mates: [{"name": "John", "address": "Berlin"}]
+
+Instructions for REMOVING mates:
+- Extract people with "remove", "delete", "take out"
+- Return ONLY the name in the removals array (no address)
+- Examples:
+  * "Remove John" → removals: ["John"]
+  * "Delete Sarah" → removals: ["Sarah"]
+
+Mixed command example:
+"Add Sarah from Munich, remove John, add Alex from Paris"
+→ {
+  "mates": [{"name": "Sarah", "address": "Munich"}, {"name": "Alex", "address": "Paris"}],
+  "removals": ["John"],
+  "theme": null
+}
+
+Theme matching:
+- Match using keywords or synonyms (e.g., "food", "dining" → "Food & Drink")
+- If theme not mentioned or unclear, set it to null
+
+Always return valid JSON with all three fields (mates, removals, theme)`;
 
     } else if (context === 'mate') {
       // Extract single mate
@@ -126,7 +149,7 @@ Instructions:
 - If name is missing, use null
 - Always return valid JSON`;
 
-    } else {
+    } else if (context === 'theme') {
       // Extract theme only
       const themes = availableThemes || [
         'City Exploration',
@@ -154,6 +177,27 @@ Instructions:
 - Examples: "culture", "museums", "art" → "Cultural"
 - Examples: "shopping", "stores", "mall" → "Shopping"
 - Always return valid JSON with exact theme name from list`;
+
+    } else {
+      // Extract mate name to remove
+      prompt = `You are extracting a name from a DELETION/REMOVAL command.
+
+User command: "${transcription}"
+
+Return ONLY this JSON structure:
+{
+  "mateName": "name"
+}
+
+Rules:
+1. Find the person's name mentioned in the command
+2. Return ONLY the name (no address, no location)
+3. The command contains words like "remove", "delete", "take out" - IGNORE these words
+4. Return ONLY the "mateName" field
+5. Example: "Delete Michael" → {"mateName": "Michael"}
+6. Example: "Remove John" → {"mateName": "John"}
+
+JSON response:`;
     }
 
     // Use new SDK API
@@ -168,6 +212,8 @@ Instructions:
 
     const responseText = response.text;
 
+    console.log('[Voice API] Gemini raw response:', responseText.slice(0, 300));
+
     if (!responseText) {
       return NextResponse.json(
         { error: 'Empty response from AI service' },
@@ -178,6 +224,10 @@ Instructions:
     let parsed: any;
     try {
       parsed = JSON.parse(responseText);
+      console.log('[Voice API] Parsed response:', JSON.stringify(parsed, null, 2));
+      console.log('[Voice API] Parsed response keys:', Object.keys(parsed));
+      console.log('[Voice API] Has "mates" key?', 'mates' in parsed);
+      console.log('[Voice API] Has "mateName" key?', 'mateName' in parsed);
     } catch (e) {
       console.error('Failed to parse AI response:', responseText.slice(0, 200));
       return NextResponse.json(
@@ -187,8 +237,11 @@ Instructions:
     }
 
     // Format and validate response based on context
+    console.log('[Voice API] Context for response formatting:', context);
+    
     if (context === 'bulk') {
       const mates = Array.isArray(parsed.mates) ? parsed.mates : [];
+      const removals = Array.isArray(parsed.removals) ? parsed.removals : [];
       const theme = parsed.theme || null;
 
       // Validate mates have name and address
@@ -196,9 +249,15 @@ Instructions:
         (mate: any) => mate.name && typeof mate.name === 'string' && mate.address && typeof mate.address === 'string'
       );
 
+      // Validate removals are non-empty strings
+      const validRemovals = removals.filter(
+        (name: any) => typeof name === 'string' && name.trim().length > 0
+      );
+
       const response: BulkResponse = {
         type: 'bulk',
         mates: validMates,
+        removals: validRemovals,
         theme,
       };
 
