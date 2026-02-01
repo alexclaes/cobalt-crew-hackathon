@@ -1,4 +1,4 @@
-type VoiceState = 'idle' | 'listening' | 'processing' | 'success' | 'error';
+type VoiceState = 'idle' | 'recording' | 'uploading' | 'transcribing' | 'processing' | 'success' | 'error';
 
 interface VoiceButtonProps {
   state: VoiceState;
@@ -17,7 +17,7 @@ export default function VoiceButton({
 }: VoiceButtonProps) {
   const getButtonContent = () => {
     switch (state) {
-      case 'listening':
+      case 'recording':
         return (
           <>
             <div className="relative flex items-center justify-center">
@@ -30,7 +30,23 @@ export default function VoiceButton({
                 <rect x="6" y="6" width="8" height="8" rx="1" />
               </svg>
             </div>
-            <span className="ml-3">Recording... Click to Stop</span>
+            <span className="ml-3">Stop Recording</span>
+          </>
+        );
+
+      case 'uploading':
+        return (
+          <>
+            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            <span className="ml-3">Uploading...</span>
+          </>
+        );
+
+      case 'transcribing':
+        return (
+          <>
+            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            <span className="ml-3">Transcribing...</span>
           </>
         );
 
@@ -100,8 +116,10 @@ export default function VoiceButton({
 
   const getButtonColor = () => {
     switch (state) {
-      case 'listening':
+      case 'recording':
         return 'bg-red-600 hover:bg-red-700';
+      case 'uploading':
+      case 'transcribing':
       case 'processing':
         return 'bg-blue-600';
       case 'success':
@@ -114,7 +132,7 @@ export default function VoiceButton({
   };
 
   const isButtonDisabled =
-    disabled || state === 'processing' || state === 'success';
+    disabled || state === 'uploading' || state === 'transcribing' || state === 'processing' || state === 'success';
 
   return (
     <button

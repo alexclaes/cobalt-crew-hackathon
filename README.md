@@ -14,6 +14,8 @@ Add multiple mates and select your trip theme using just your voice! Say everyth
 **Example:** 
 "Add John from Berlin, Sarah from Munich, and Tom from Paris. I want a cultural trip."
 
-**Cost:** $0 (Free tier: 1,500 requests/day)
+**Cost:** ~$0.006 per voice input (Whisper) + Free Gemini tier
 
-**Tech:** Web Speech API + Google Gemini Flash (via official `@google/genai` SDK)
+**Tech:** OpenAI Whisper + Google Gemini Flash (professional-grade accuracy, all browsers)
+
+👉 **[Whisper Migration Details](WHISPER_MIGRATION.md)**
