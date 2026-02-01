@@ -22,7 +22,20 @@ export default function MatesList({ users }: MatesListProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   return (
-    <div className="bg-white rounded-2xl border-[3px] border-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] p-6">
+    <div className="bg-white rounded-2xl border-[3px] border-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] p-4 sm:p-6 relative overflow-visible">
+      {/* Decorative sticker - pink circle in top right corner */}
+      <div className="absolute top-2 right-2 sm:top-3 sm:right-3 z-0 pointer-events-none rotate-12">
+        <div className="w-3 h-3 sm:w-4 sm:h-4 bg-[#ff69b4] rounded-full border-[1.5px] sm:border-2 border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]" />
+      </div>
+
+      {/* Half circles peeking behind the card */}
+      {/* Left side - half circle - smaller size */}
+      <div className="absolute -left-5 sm:-left-7 md:-left-9 top-1/2 -translate-y-1/2 z-[-1] pointer-events-none rotate-6">
+        <div className="w-8 h-8 sm:w-12 sm:h-12 md:w-16 md:h-16 bg-[#c8ff00] rounded-full border-[2px] sm:border-[3px] border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]" />
+      </div>
+      
+      {/* Right side - half circle - removed to avoid overlap */}
+
       <button
         onClick={() => setIsExpanded(!isExpanded)}
         className="w-full flex items-center justify-between mb-4 hover:opacity-80 transition-opacity cursor-pointer"

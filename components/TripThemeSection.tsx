@@ -34,9 +34,30 @@ export function TripThemeSection({
 
   return (
     <section className="relative space-y-4">
-      <div className="bg-white border-[3px] border-black rounded-2xl p-6 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] overflow-visible">
+      <div className="bg-white border-[3px] border-black rounded-2xl p-4 sm:p-6 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] overflow-visible relative">
+        {/* Decorative stickers in whitespace */}
+        {/* Top left corner sticker */}
+        <div className="absolute top-2 left-2 sm:top-3 sm:left-3 z-0 pointer-events-none -rotate-12">
+          <div className="w-3 h-3 sm:w-4 sm:h-4 bg-[#ff69b4] rounded-full border-[1.5px] sm:border-2 border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]" />
+        </div>
+        
+        {/* Bottom right corner sticker */}
+        <div className="absolute bottom-2 right-2 sm:bottom-3 sm:right-3 z-0 pointer-events-none rotate-6">
+          <svg viewBox="0 0 24 24" className="w-4 h-4 sm:w-5 sm:h-5 fill-[#c8ff00] stroke-black stroke-[1.5px]">
+            <path d="M12 0 L14.5 9 L24 12 L14.5 15 L12 24 L9.5 15 L0 12 L9.5 9 Z" />
+          </svg>
+        </div>
+
+        {/* Half circles peeking behind the card */}
+        {/* Left side - half circle - removed to avoid overlap with MatesSection */}
+        
+        {/* Right side - half circle - medium size */}
+        <div className="absolute -right-6 sm:-right-8 md:-right-10 bottom-1/4 z-[-1] pointer-events-none rotate-12">
+          <div className="w-10 h-10 sm:w-14 sm:h-14 md:w-18 md:h-18 bg-[#7DF9FF] rounded-full border-[2px] sm:border-[3px] border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]" />
+        </div>
+
         {/* Section Header */}
-        <h2 className="text-xl font-bold text-black font-sans mb-4">
+        <h2 className="text-lg sm:text-xl font-bold text-black font-sans mb-4">
           What are you up for?
         </h2>
 
