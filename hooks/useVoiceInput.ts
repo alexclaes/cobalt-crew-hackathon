@@ -137,9 +137,13 @@ export function useVoiceInput({
 
     recognition.onend = () => {
       console.log('[Voice] Recognition ended');
-      if (state === 'listening') {
-        setState('idle');
-      }
+      // Use a callback to ensure we're checking the current state
+      setState((currentState) => {
+        if (currentState === 'listening') {
+          return 'idle';
+        }
+        return currentState;
+      });
     };
 
     recognitionRef.current = recognition;
