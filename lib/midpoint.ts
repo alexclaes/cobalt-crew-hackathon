@@ -60,12 +60,25 @@ export function getDefaultRadiusKm(midpoint: Coordinate, coordinates: Coordinate
   return 50;                    // large (e.g. Hamburg–Munich)
 }
 
+/** Convert degrees to radians */
+function toRad(deg: number): number {
+  return (deg * Math.PI) / 180;
+}
+
+/** Convert radians to degrees */
+function toDeg(rad: number): number {
+  return (rad * 180) / Math.PI;
+}
+
 /**
- * Calculates the geographic midpoint (centroid) from an array of coordinates
- * by averaging the latitude and longitude values.
+ * Calculates the geographic midpoint using the spherical center (geodesic centroid).
+ * Converts each point to a 3D unit vector on the sphere, averages those vectors,
+ * normalizes the result, then converts back to lat/lon. This respects Earth's
+ * curvature and is more accurate than averaging lat/lon directly, especially
+ * over long distances.
  *
  * @param coordinates - Array of coordinate objects with lat and lon
- * @returns The midpoint coordinate, or null if the array is empty
+ * @returns The spherical center, or null if the array is empty or points cancel (e.g. antipodal)
  */
 export function calculateMidpoint(
   coordinates: Coordinate[]
@@ -74,16 +87,43 @@ export function calculateMidpoint(
     return null;
   }
 
+  const toCartesian = (c: Coordinate) => {
+    const lat = toRad(c.lat);
+    const lon = toRad(c.lon);
+    return {
+      x: Math.cos(lat) * Math.cos(lon),
+      y: Math.cos(lat) * Math.sin(lon),
+      z: Math.sin(lat),
+    };
+  };
+
   const sum = coordinates.reduce(
-    (acc, coord) => ({
-      lat: acc.lat + coord.lat,
-      lon: acc.lon + coord.lon,
-    }),
-    { lat: 0, lon: 0 }
+    (acc, coord) => {
+      const p = toCartesian(coord);
+      return { x: acc.x + p.x, y: acc.y + p.y, z: acc.z + p.z };
+    },
+    { x: 0, y: 0, z: 0 }
   );
 
+  const len = Math.sqrt(sum.x * sum.x + sum.y * sum.y + sum.z * sum.z);
+  if (len < 1e-10) {
+    // Antipodal or nearly canceling points: fall back to arithmetic mean
+    const avg = coordinates.reduce(
+      (acc, c) => ({ lat: acc.lat + c.lat, lon: acc.lon + c.lon }),
+      { lat: 0, lon: 0 }
+    );
+    return { lat: avg.lat / coordinates.length, lon: avg.lon / coordinates.length };
+  }
+
+  const x = sum.x / len;
+  const y = sum.y / len;
+  const z = sum.z / len;
+
+  const lon = Math.atan2(y, x);
+  const lat = Math.atan2(z, Math.sqrt(x * x + y * y));
+
   return {
-    lat: sum.lat / coordinates.length,
-    lon: sum.lon / coordinates.length,
+    lat: toDeg(lat),
+    lon: toDeg(lon),
   };
 }
