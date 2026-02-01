@@ -212,14 +212,14 @@ JSON response:`;
 
     const responseText = response.text;
 
-    console.log('[Voice API] Gemini raw response:', responseText.slice(0, 300));
-
     if (!responseText) {
       return NextResponse.json(
         { error: 'Empty response from AI service' },
         { status: 502 }
       );
     }
+
+    console.log('[Voice API] Gemini raw response:', responseText.slice(0, 300));
 
     let parsed: any;
     try {
