@@ -29,6 +29,10 @@ export function useVoiceInput({
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const previousTriggerRef = useRef<number>(0);
   const maxRecordingDuration = 120; // 2 minutes in seconds
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const silenceDetectionIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Check browser support for MediaRecorder
   useEffect(() => {
@@ -57,6 +61,15 @@ export function useVoiceInput({
       }
       if (recordingIntervalRef.current) {
         clearInterval(recordingIntervalRef.current);
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+      }
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+      }
+      if (silenceDetectionIntervalRef.current) {
+        clearInterval(silenceDetectionIntervalRef.current);
       }
     };
   }, []);
@@ -170,6 +183,18 @@ export function useVoiceInput({
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
 
+      // Set up Web Audio API for silence detection
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      audioContextRef.current = audioContext;
+      
+      const analyser = audioContext.createAnalyser();
+      analyserRef.current = analyser;
+      analyser.fftSize = 2048;
+      analyser.smoothingTimeConstant = 0.8;
+      
+      const source = audioContext.createMediaStreamSource(stream);
+      source.connect(analyser);
+
       // Determine best audio format
       let mimeType = 'audio/webm';
       if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
@@ -200,10 +225,24 @@ export function useVoiceInput({
           streamRef.current = null;
         }
 
-        // Clear recording interval
+        // Clear intervals and timeouts
         if (recordingIntervalRef.current) {
           clearInterval(recordingIntervalRef.current);
           recordingIntervalRef.current = null;
+        }
+        if (silenceDetectionIntervalRef.current) {
+          clearInterval(silenceDetectionIntervalRef.current);
+          silenceDetectionIntervalRef.current = null;
+        }
+        if (silenceTimeoutRef.current) {
+          clearTimeout(silenceTimeoutRef.current);
+          silenceTimeoutRef.current = null;
+        }
+
+        // Close audio context
+        if (audioContextRef.current) {
+          audioContextRef.current.close();
+          audioContextRef.current = null;
         }
 
         // Process the audio
@@ -242,6 +281,63 @@ export function useVoiceInput({
           return newDuration;
         });
       }, 1000);
+
+      // Start silence detection after 2 seconds (give time for user to start speaking)
+      let hasDetectedSpeech = false;
+      let consecutiveSilenceCount = 0;
+      let speechLevelSum = 0;
+      let speechLevelCount = 0;
+      
+      const SPEECH_THRESHOLD = 0.05; // Threshold to detect speech (higher = less sensitive to noise)
+      const SILENCE_DURATION = 5; // Number of checks (0.6s each = 3 seconds total)
+      const MIN_RECORDING_TIME = 2000; // Minimum 2 seconds before auto-stop can trigger
+      
+      const recordingStartTime = Date.now();
+      
+      setTimeout(() => {
+        silenceDetectionIntervalRef.current = setInterval(() => {
+          if (!analyserRef.current || !mediaRecorderRef.current || mediaRecorderRef.current.state !== 'recording') {
+            return;
+          }
+
+          const dataArray = new Float32Array(analyserRef.current.fftSize);
+          analyserRef.current.getFloatTimeDomainData(dataArray);
+          
+          // Calculate RMS (Root Mean Square) volume
+          let sum = 0;
+          for (let i = 0; i < dataArray.length; i++) {
+            sum += dataArray[i] * dataArray[i];
+          }
+          const rms = Math.sqrt(sum / dataArray.length);
+          
+          // Track average speech level for adaptive threshold
+          if (rms > SPEECH_THRESHOLD) {
+            hasDetectedSpeech = true;
+            speechLevelSum += rms;
+            speechLevelCount++;
+            consecutiveSilenceCount = 0;
+            console.log(`[Voice] Speech detected: RMS=${rms.toFixed(4)}`);
+          } else if (hasDetectedSpeech) {
+            // Only consider silence if we've recorded for minimum time
+            const recordingTime = Date.now() - recordingStartTime;
+            if (recordingTime >= MIN_RECORDING_TIME) {
+              consecutiveSilenceCount++;
+              console.log(`[Voice] Silence check ${consecutiveSilenceCount}/${SILENCE_DURATION}: RMS=${rms.toFixed(4)}`);
+              
+              if (consecutiveSilenceCount >= SILENCE_DURATION) {
+                const avgSpeechLevel = speechLevelSum / speechLevelCount;
+                console.log(`[Voice] Auto-stopping after silence. Avg speech level: ${avgSpeechLevel.toFixed(4)}`);
+                stopListening();
+              }
+            }
+          } else {
+            // Still waiting for initial speech
+            if (rms > SPEECH_THRESHOLD * 0.5) {
+              console.log(`[Voice] Background noise detected: RMS=${rms.toFixed(4)}`);
+            }
+          }
+        }, 600); // Check every 600ms
+      }, 2000); // Wait 2 seconds before starting silence detection
 
     } catch (error) {
       console.error('[Voice] Failed to start recording:', error);
