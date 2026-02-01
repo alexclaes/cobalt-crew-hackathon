@@ -1,6 +1,6 @@
 "use client";
 
-import { X, Plus } from "lucide-react";
+import { X, Plus, Users } from "lucide-react";
 
 interface User {
   id: string;
@@ -86,16 +86,17 @@ export function MatesSection({
         <div className="flex flex-col sm:flex-row gap-3">
           <button
             onClick={onSelectFromList}
-            className="flex-1 flex items-center justify-center py-3 px-4 rounded-full border-[3px] border-black bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all font-mono text-sm text-black font-medium"
+            className="flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-full border-[3px] border-black bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all font-mono text-sm text-black font-medium"
           >
-            Choose mates from friends list
+            <Users className="w-4 h-4" />
+            From Friends
           </button>
           <button
             onClick={onAddManualMate}
-            className="flex-1 flex items-center justify-center gap-1 py-3 px-4 rounded-full border-[3px] border-black bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all font-mono text-sm text-black font-medium"
+            className="flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-full border-[3px] border-black bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all font-mono text-sm text-black font-medium"
           >
             <Plus className="w-4 h-4" />
-            Add Mate Manually
+            Add Manually
           </button>
         </div>
       </div>

@@ -111,13 +111,9 @@ export function VoiceSection({
         {/* Dynamic status message */}
         <p
           className={`font-mono text-xs text-center italic min-h-[32px] flex items-center justify-center ${
-            state === "idle"
-              ? "text-black/70"
-              : state === "error"
+            state === "error"
               ? "text-red-600 font-semibold"
-              : state === "success"
-              ? "text-green-700 font-semibold"
-              : "text-blue-700 font-semibold"
+              : "text-black/70"
           }`}
         >
           {getStatusMessage()}
