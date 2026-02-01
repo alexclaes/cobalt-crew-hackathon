@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { useParams } from 'next/navigation';
 import { Plus, Share2 } from 'lucide-react';
@@ -13,7 +13,7 @@ import type { MapPoint, Restaurant, PlaceType } from '@/components/MapDisplay';
 import type { Trip } from '@/types/trip';
 import { getPlaceTypesForTheme } from '@/lib/theme-place-types';
 
-function getTripTitle(trip: Trip | null): JSX.Element {
+function getTripTitle(trip: Trip | null): React.ReactElement {
   if (!trip || !trip.theme) {
     return <>Trip Planning</>;
   }
