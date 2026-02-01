@@ -53,3 +53,10 @@ nextjs-portal {
   background: transparent !important;
   border: none !important;
 }
+
+/* Custom start point and midpoint markers */
+.leaflet-div-icon.startpoint-marker,
+.leaflet-div-icon.midpoint-marker {
+  background: transparent !important;
+  border: none !important;
+}
