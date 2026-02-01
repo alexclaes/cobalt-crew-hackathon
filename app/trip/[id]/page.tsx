@@ -739,15 +739,15 @@ export default function TripPage() {
   // Loading state
   if (isLoading) {
     return (
-      <main className="min-h-screen bg-[#ffb6c1] relative overflow-hidden">
+      <main className="min-h-screen bg-[#ffb6c1] relative overflow-hidden animate-fade-in">
         <FloatingStickers />
         <div className="relative z-10">
           <Header />
           <div className="max-w-6xl mx-auto px-4 sm:px-4 md:px-6">
             <div className="flex items-center justify-center py-20">
-              <div className="text-center">
-                <div className="w-16 h-16 border-4 border-black border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                <p className="text-black font-mono">Loading trip...</p>
+              <div className="text-center animate-fade-in-up-bounce">
+                <div className="w-16 h-16 border-4 border-black border-t-transparent rounded-full animate-spin-bounce mx-auto mb-4"></div>
+                <p className="text-black font-mono animate-pulse-gentle">Loading trip...</p>
               </div>
             </div>
           </div>
@@ -759,15 +759,15 @@ export default function TripPage() {
   // Error state
   if (error || !trip) {
     return (
-      <main className="min-h-screen bg-[#ffb6c1] relative overflow-hidden">
+      <main className="min-h-screen bg-[#ffb6c1] relative overflow-hidden animate-fade-in">
         <FloatingStickers />
         <div className="relative z-10">
           <Header />
           <div className="max-w-6xl mx-auto px-4 sm:px-4 md:px-6">
             <div className="text-center py-12 sm:py-20">
-              <div className="bg-white border-[3px] border-black rounded-2xl p-6 sm:p-8 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] inline-block max-w-full mx-4">
+              <div className="bg-white border-[3px] border-black rounded-2xl p-6 sm:p-8 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] inline-block max-w-full mx-4 animate-bounce-in">
                 <svg
-                  className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-4 text-[#ff1493]"
+                  className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-4 text-[#ff1493] animate-shake"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -787,7 +787,7 @@ export default function TripPage() {
                 </p>
                 <a
                   href="/"
-                  className="inline-block px-4 sm:px-6 py-2 sm:py-3 bg-[#ff1493] text-white rounded-lg font-mono font-bold border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all text-sm sm:text-base"
+                  className="inline-block px-4 sm:px-6 py-2 sm:py-3 bg-[#ff1493] text-white rounded-lg font-mono font-bold border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all active:animate-scale-bounce text-sm sm:text-base"
                 >
                   Create a New Trip
                 </a>
@@ -800,7 +800,7 @@ export default function TripPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#ffb6c1] relative overflow-hidden">
+    <main className="min-h-screen bg-[#ffb6c1] relative overflow-hidden animate-fade-in">
       <FloatingStickers />
       <div className="relative z-10">
         <Header />

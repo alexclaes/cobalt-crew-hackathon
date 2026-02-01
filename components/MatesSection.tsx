@@ -32,7 +32,7 @@ export function MatesSection({
   onAddManualMate,
 }: MatesSectionProps) {
   return (
-    <section className="mb-6">
+    <section className="mb-6 animate-fade-in-up-bounce" style={{ animationDelay: '0.1s' }}>
       <div className="bg-white border-[3px] border-black rounded-2xl p-4 sm:p-6 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] relative overflow-visible">
         {/* Decorative stickers in whitespace */}
         {/* Top right corner sticker */}
@@ -75,7 +75,8 @@ export function MatesSection({
             {users.map((user, index) => (
               <div
                 key={user.id}
-                className="group flex items-center gap-2 px-3 py-2 rounded-full bg-[#f5f5f5] border-[3px] border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+                className="group flex items-center gap-2 px-3 py-2 rounded-full bg-[#f5f5f5] border-[3px] border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:rotate-1 transition-all animate-bounce-in"
+                style={{ animationDelay: `${index * 0.1}s` }}
               >
                 <div
                   className={`w-7 h-7 ${AVATAR_COLORS[index % AVATAR_COLORS.length]} rounded-full border-2 border-black flex items-center justify-center font-bold text-xs text-black`}
@@ -94,7 +95,7 @@ export function MatesSection({
                 </div>
                 <button
                   onClick={() => onRemoveUser(user.id)}
-                  className="w-5 h-5 rounded-full bg-black/10 hover:bg-[#ff1493] hover:text-white flex items-center justify-center transition-colors ml-1"
+                  className="w-5 h-5 rounded-full bg-black/10 hover:bg-[#ff1493] hover:text-white flex items-center justify-center transition-all active:animate-scale-bounce ml-1"
                 >
                   <X className="w-3 h-3" />
                 </button>
@@ -107,14 +108,14 @@ export function MatesSection({
         <div className="flex flex-col sm:flex-row gap-3">
           <button
             onClick={onSelectFromList}
-            className="flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-full border-[3px] border-black bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all font-mono text-sm text-black font-medium"
+            className="flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-full border-[3px] border-black bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all active:animate-scale-bounce font-mono text-sm text-black font-medium"
           >
             <Users className="w-4 h-4" />
             From Friends
           </button>
           <button
             onClick={onAddManualMate}
-            className="flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-full border-[3px] border-black bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all font-mono text-sm text-black font-medium"
+            className="flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-full border-[3px] border-black bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all active:animate-scale-bounce font-mono text-sm text-black font-medium"
           >
             <Plus className="w-4 h-4" />
             Add Manually

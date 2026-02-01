@@ -21,9 +21,11 @@ export default function VoiceButton({
         return (
           <>
             <div className="relative flex items-center justify-center">
-              <div className="absolute w-12 h-12 bg-red-500 rounded-full animate-ping opacity-75"></div>
+              <div className="absolute w-12 h-12 bg-red-500 rounded-full animate-pulse-rings opacity-75"></div>
+              <div className="absolute w-10 h-10 bg-red-500 rounded-full animate-pulse-rings opacity-50" style={{ animationDelay: '0.3s' }}></div>
+              <div className="absolute w-8 h-8 bg-red-500 rounded-full animate-pulse-rings opacity-25" style={{ animationDelay: '0.6s' }}></div>
               <svg
-                className="w-6 h-6 text-white relative z-10"
+                className="w-6 h-6 text-white relative z-10 animate-pulse-gentle"
                 fill="currentColor"
                 viewBox="0 0 20 20"
               >
@@ -37,7 +39,7 @@ export default function VoiceButton({
       case 'uploading':
         return (
           <>
-            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin-bounce"></div>
             <span className="ml-3">Uploading...</span>
           </>
         );
@@ -45,7 +47,7 @@ export default function VoiceButton({
       case 'transcribing':
         return (
           <>
-            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin-bounce"></div>
             <span className="ml-3">Transcribing...</span>
           </>
         );
@@ -53,7 +55,7 @@ export default function VoiceButton({
       case 'processing':
         return (
           <>
-            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin-bounce"></div>
             <span className="ml-3">Processing...</span>
           </>
         );
@@ -62,7 +64,7 @@ export default function VoiceButton({
         return (
           <>
             <svg
-              className="w-6 h-6 text-white"
+              className="w-6 h-6 text-white animate-bounce-in-check"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -82,7 +84,7 @@ export default function VoiceButton({
         return (
           <>
             <svg
-              className="w-6 h-6 text-white"
+              className="w-6 h-6 text-white animate-shake"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -146,6 +148,8 @@ export default function VoiceButton({
         transition-all duration-200
         disabled:opacity-50 disabled:cursor-not-allowed
         shadow-lg hover:shadow-xl
+        active:animate-scale-bounce
+        ${state === 'error' ? 'animate-shake' : ''}
         min-w-[200px]
       `}
     >

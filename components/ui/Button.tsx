@@ -11,11 +11,11 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variantStyles: Record<ButtonVariant, string> = {
-  primary: 'bg-[#ff1493] text-white border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] disabled:opacity-50',
-  secondary: 'bg-white text-black border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] disabled:opacity-50',
-  danger: 'bg-red-600 text-white border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] disabled:opacity-50',
-  ghost: 'bg-transparent text-black hover:bg-black/10 disabled:opacity-50',
-  neobrutalist: 'bg-[#4361ee] text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] disabled:opacity-50',
+  primary: 'bg-[#ff1493] text-white border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:rotate-1 active:animate-scale-bounce disabled:opacity-50',
+  secondary: 'bg-white text-black border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:-rotate-1 active:animate-scale-bounce disabled:opacity-50',
+  danger: 'bg-red-600 text-white border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] active:animate-scale-bounce disabled:opacity-50',
+  ghost: 'bg-transparent text-black hover:bg-black/10 hover:scale-105 active:animate-scale-bounce disabled:opacity-50',
+  neobrutalist: 'bg-[#4361ee] text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:rotate-1 active:animate-scale-bounce disabled:opacity-50',
 };
 
 const sizeStyles: Record<ButtonSize, string> = {
@@ -48,7 +48,7 @@ export default function Button({
       {...props}
     >
       {isLoading && (
-        <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+        <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin-bounce" />
       )}
       {children}
     </button>

@@ -42,12 +42,12 @@ function PlaceDetails({
 
   return (
     <div className="space-y-3">
-      <div>
+      <div className="animate-fade-in-up-bounce">
         <h3 className="text-lg font-bold text-black font-mono">{place.name}</h3>
       </div>
 
       <div className="space-y-2 text-sm">
-        <div className="flex items-start gap-2">
+        <div className="flex items-start gap-2 animate-reveal-bounce" style={{ animationDelay: '0.1s' }}>
           <span>📍</span>
           <div className="font-mono">
             <span className="font-bold text-black">Distance:</span>{' '}
@@ -56,7 +56,7 @@ function PlaceDetails({
         </div>
 
         {stars && (
-          <div className="flex items-start gap-2">
+          <div className="flex items-start gap-2 animate-reveal-bounce" style={{ animationDelay: '0.2s' }}>
             <span>⭐</span>
             <div className="font-mono">
               <span className="font-bold text-black">Rating:</span>{' '}
@@ -121,17 +121,17 @@ function PlaceDetails({
       </div>
 
       {reasoning && (
-        <div className="mt-4 p-3 bg-[#E0B0FF]/30 rounded-lg border-[2px] border-[#E0B0FF]">
+        <div className="mt-4 p-3 bg-[#E0B0FF]/30 rounded-lg border-[2px] border-[#E0B0FF] animate-reveal-bounce" style={{ animationDelay: '0.3s' }}>
           <p className="text-sm text-black font-mono">{reasoning}</p>
         </div>
       )}
 
-      <div className="mt-4 pt-3 border-t-[2px] border-black/10">
+      <div className="mt-4 pt-3 border-t-[2px] border-black/10 animate-reveal-bounce" style={{ animationDelay: '0.4s' }}>
         <a
           href={`https://www.google.com/maps?q=${place.lat},${place.lon}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-sm text-[#ff1493] hover:text-[#ff1493]/80 hover:underline inline-flex items-center gap-1 font-mono font-medium"
+          className="text-sm text-[#ff1493] hover:text-[#ff1493]/80 hover:underline inline-flex items-center gap-1 font-mono font-medium transition-all hover:animate-pulse-gentle"
         >
           <ExternalLink className="w-3 h-3" />
           View on Google Maps
@@ -238,15 +238,15 @@ export default function Recommendation({
         <div className="w-9 h-9 sm:w-12 sm:h-12 md:w-16 md:h-16 bg-[#7DF9FF] rounded-full border-[2px] sm:border-[3px] border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]" />
       </div>
 
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 animate-fade-in-up-bounce">
         <h2 className="text-xl font-bold text-black font-sans">Recommendation</h2>
         {onRegenerate && currentRecommendation && (
           <button
             onClick={() => onRegenerate(activeTab)}
-            className="p-2 text-black hover:bg-[#ff1493]/20 rounded-lg transition-colors border-2 border-transparent hover:border-black"
+            className="p-2 text-black hover:bg-[#ff1493]/20 rounded-lg transition-all border-2 border-transparent hover:border-black active:animate-scale-bounce"
             title="Regenerate recommendation"
           >
-            <RefreshCw className="w-5 h-5" />
+            <RefreshCw className="w-5 h-5 hover:animate-spin-bounce" />
           </button>
         )}
       </div>
@@ -258,9 +258,9 @@ export default function Recommendation({
             <button
               key={category}
               onClick={() => setActiveTab(category)}
-              className={`px-4 py-2 text-sm font-bold font-mono rounded-full border-[3px] transition-all ${
+              className={`px-4 py-2 text-sm font-bold font-mono rounded-full border-[3px] transition-all active:animate-scale-bounce ${
                 activeTab === category
-                  ? `${tabColors[index % tabColors.length]} border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]`
+                  ? `${tabColors[index % tabColors.length]} border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] animate-bounce-in`
                   : 'bg-white text-black/50 border-black/20 hover:border-black/40'
               }`}
             >
@@ -272,38 +272,16 @@ export default function Recommendation({
 
       {/* Content */}
       {showLoading ? (
-        <div className="flex flex-col items-center justify-center gap-2 py-8">
-          <style
-            dangerouslySetInnerHTML={{
-              __html: `
-            @keyframes jump {
-              0%, 100% { transform: translateY(0); }
-              50% { transform: translateY(-20px); }
-            }
-            .jump-emoji-1 {
-              animation: jump 0.6s ease-in-out infinite;
-              animation-delay: 0s;
-            }
-            .jump-emoji-2 {
-              animation: jump 0.6s ease-in-out infinite;
-              animation-delay: 0.2s;
-            }
-            .jump-emoji-3 {
-              animation: jump 0.6s ease-in-out infinite;
-              animation-delay: 0.4s;
-            }
-          `,
-            }}
-          />
+        <div className="flex flex-col items-center justify-center gap-4 py-8 animate-fade-in">
           <div className="flex items-center justify-center gap-2">
-            <span className="text-4xl inline-block jump-emoji-1">{themeIcon}</span>
-            <span className="text-4xl inline-block jump-emoji-2">{themeIcon}</span>
-            <span className="text-4xl inline-block jump-emoji-3">{themeIcon}</span>
+            <span className="text-4xl inline-block animate-jump-rotate" style={{ animationDelay: '0s' }}>{themeIcon}</span>
+            <span className="text-4xl inline-block animate-jump-rotate" style={{ animationDelay: '0.2s' }}>{themeIcon}</span>
+            <span className="text-4xl inline-block animate-jump-rotate" style={{ animationDelay: '0.4s' }}>{themeIcon}</span>
           </div>
-          <p className="text-sm text-black/70 mt-2 font-mono">Enriching with AI...</p>
+          <p className="text-sm text-black/70 mt-2 font-mono animate-pulse-gentle">Enriching with AI...</p>
         </div>
       ) : !showLoading && currentRecommendation ? (
-        <div>
+        <div className="animate-reveal-bounce">
           {currentRecommendation.place ? (
             <PlaceDetails
               place={currentRecommendation.place}

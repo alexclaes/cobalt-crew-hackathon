@@ -33,7 +33,7 @@ export function TripThemeSection({
   };
 
   return (
-    <section className="relative space-y-4">
+    <section className="relative space-y-4 animate-fade-in-up-bounce">
       <div className="bg-white border-[3px] border-black rounded-2xl p-4 sm:p-6 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] overflow-visible relative">
         {/* Decorative stickers in whitespace */}
         {/* Top left corner sticker */}
@@ -66,7 +66,7 @@ export function TripThemeSection({
           <button
             onClick={() => setIsOpen(!isOpen)}
             disabled={themes.length === 0}
-            className="w-full flex items-center justify-between px-4 py-3 bg-white border-[2px] border-black/20 rounded-lg font-mono text-sm text-left hover:border-black/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full flex items-center justify-between px-4 py-3 bg-white border-[2px] border-black/20 rounded-lg font-mono text-sm text-left hover:border-black/40 transition-all active:animate-scale-bounce disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <span className={selectedTheme ? "text-black" : "text-black/40"}>
               {selectedTheme
@@ -76,14 +76,14 @@ export function TripThemeSection({
                   : "Select a theme..."}
             </span>
             <ChevronDown
-              className={`w-5 h-5 text-black/40 transition-transform ${isOpen ? "rotate-180" : ""
+              className={`w-5 h-5 text-black/40 transition-transform duration-300 ${isOpen ? "rotate-180" : ""
                 }`}
             />
           </button>
 
           {/* Dropdown Menu */}
           {isOpen && themes.length > 0 && (
-            <div className="absolute top-full left-0 right-0 mt-2 bg-white border-[3px] border-black rounded-lg overflow-hidden shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] z-50 max-h-[300px] overflow-y-auto">
+            <div className="absolute top-full left-0 right-0 mt-2 bg-white border-[3px] border-black rounded-lg overflow-hidden shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] z-50 max-h-[300px] overflow-y-auto animate-fade-in-up-bounce">
               {themes.map((theme, index) => {
                 const bgColors = [
                   "bg-[#ff69b4]/20",
@@ -98,7 +98,8 @@ export function TripThemeSection({
                     key={theme.id}
                     onClick={() => handleSelect(theme)}
                     className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:${bgColors[index % bgColors.length]
-                      } transition-colors border-b border-black/10 last:border-b-0 font-mono text-sm hover:bg-[#ff69b4]/10`}
+                      } transition-all border-b border-black/10 last:border-b-0 font-mono text-sm hover:bg-[#ff69b4]/10 active:animate-scale-bounce animate-slide-in-right`}
+                    style={{ animationDelay: `${index * 0.05}s` }}
                   >
                     <span className="text-black">
                       {theme.icon} {theme.name}
@@ -129,13 +130,13 @@ export function TripActionButton({
   validationMessage?: string;
 }) {
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 bg-[#ffb6c1] border-t-[3px] border-black p-4">
+    <div className="fixed bottom-0 left-0 right-0 z-50 bg-[#ffb6c1] border-t-[3px] border-black p-4 animate-fade-in-up-bounce">
       <div className="max-w-2xl mx-auto">
         {canCreateTrip && selectedThemeId ? (
           <button
             onClick={onCreateTrip}
             disabled={isCreating}
-            className="w-full bg-[#ff1493] text-white font-mono font-bold text-sm px-5 py-3 rounded-lg border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="w-full bg-[#ff1493] text-white font-mono font-bold text-sm px-5 py-3 rounded-lg border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all active:animate-scale-bounce disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {isCreating && (
               <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
