@@ -46,9 +46,11 @@ export default function TripPage() {
   const [recommendation, setRecommendation] = useState<{ placeId: string; reasoning?: string } | null>(null);
   const lastEnrichedKeyRef = useRef<string | null>(null);
   const [apiMidpoint, setApiMidpoint] = useState<{ lat: number; lon: number } | null>(null);
+  const [carTravelTimesSeconds, setCarTravelTimesSeconds] = useState<number[] | null>(null);
   const [meetingPointLoading, setMeetingPointLoading] = useState(false);
   const [carMidpoint, setCarMidpoint] = useState<{ lat: number; lon: number } | null>(null);
   const [carRoutePolylines, setCarRoutePolylines] = useState<Array<Array<[number, number]>>>([]);
+  const [carRoutesLoading, setCarRoutesLoading] = useState(false);
 
   const togglePlaceType = (type: PlaceType) => {
     setPlaceTypes((prev) =>
@@ -110,6 +112,7 @@ export default function TripPage() {
   useEffect(() => {
     if (!trip || trip.users.length < 2 || !wantCarMeetingPoint) {
       setApiMidpoint(null);
+      setCarTravelTimesSeconds(null);
       return;
     }
     let cancelled = false;
@@ -124,11 +127,20 @@ export default function TripPage() {
         if (!res.ok) throw new Error(res.statusText);
         return res.json();
       })
-      .then((data: { lat: number; lon: number }) => {
-        if (!cancelled) setApiMidpoint({ lat: data.lat, lon: data.lon });
+      .then((data: { lat: number; lon: number; travelTimes?: number[] }) => {
+        if (!cancelled) {
+          // #region agent log
+          fetch('http://127.0.0.1:7244/ingest/8e2c6a3c-7e89-4fc0-8b62-983893625af2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'trip/page.tsx:effect1-then',message:'Meeting-point effect1 response',data:{hasTravelTimes:Array.isArray(data.travelTimes),travelTimesLength:Array.isArray(data.travelTimes)?data.travelTimes.length:null},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1'})}).catch(()=>{});
+          // #endregion
+          setApiMidpoint({ lat: data.lat, lon: data.lon });
+          setCarTravelTimesSeconds(Array.isArray(data.travelTimes) ? data.travelTimes : null);
+        }
       })
       .catch(() => {
-        if (!cancelled) setApiMidpoint(null);
+        if (!cancelled) {
+          setApiMidpoint(null);
+          setCarTravelTimesSeconds(null);
+        }
       })
       .finally(() => {
         if (!cancelled) setMeetingPointLoading(false);
@@ -154,30 +166,58 @@ export default function TripPage() {
       body: JSON.stringify({ coordinates, transport: 'car' }),
     })
       .then((r) => (r.ok ? r.json() : null))
-      .then((data: { lat: number; lon: number } | null) => (cancelled ? null : data))
+      .then((data: { lat: number; lon: number; travelTimes?: number[] } | null) => (cancelled ? null : data))
       .catch(() => null)
       .then((car) => {
-        if (!cancelled && geoFallback) setCarMidpoint(car ?? geoFallback);
+        if (!cancelled && geoFallback) {
+          // #region agent log
+          if (car && typeof fetch !== 'undefined') fetch('http://127.0.0.1:7244/ingest/8e2c6a3c-7e89-4fc0-8b62-983893625af2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'trip/page.tsx:effect2-then',message:'Meeting-point effect2 response',data:{hasTravelTimes:Array.isArray((car as {travelTimes?: number[]}).travelTimes),travelTimesLength:Array.isArray((car as {travelTimes?: number[]}).travelTimes)?(car as {travelTimes: number[]}).travelTimes.length:null},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H3',runId:'post-fix'})}).catch(()=>{});
+          // #endregion
+          setCarMidpoint(car ?? geoFallback);
+          if (car && Array.isArray((car as { travelTimes?: number[] }).travelTimes))
+            setCarTravelTimesSeconds((car as { travelTimes: number[] }).travelTimes);
+        }
       });
     return () => { cancelled = true; };
   }, [trip?.id, trip?.users?.length]);
 
-  // Fetch driving route geometry from each startpoint to car midpoint (for drawing road routes on map)
+  // Display midpoint: car uses API result or geographic fallback; else geographic (incl. legacy train / URL fallback)
+  const midpoint =
+    effectiveTransportMode === 'car'
+      ? (apiMidpoint ?? geographicMidpoint)
+      : geographicMidpoint;
+
+  // When car is chosen: single target for drawing and route fetch (so car routes always draw)
+  const carTarget =
+    effectiveTransportMode === 'car'
+      ? (apiMidpoint ?? carMidpoint ?? geographicMidpoint)
+      : null;
+
+  // Fetch driving route geometry from each startpoint to car target (for drawing road routes when car is chosen)
   useEffect(() => {
-    const users = trip?.users ?? [];
-    const car = carMidpoint;
-    if (!car || users.length < 2) {
+    if (effectiveTransportMode !== 'car') {
       setCarRoutePolylines([]);
+      setCarRoutesLoading(false);
+      return;
+    }
+    const users = trip?.users ?? [];
+    const target = carTarget;
+    // #region agent log
+    if (typeof fetch !== 'undefined') fetch('http://127.0.0.1:7244/ingest/8e2c6a3c-7e89-4fc0-8b62-983893625af2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'trip/page.tsx:route-effect-entry',message:'Route fetch effect',data:{hasTarget:!!target,usersLen:users.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1',runId:'post-fix'})}).catch(()=>{});
+    // #endregion
+    if (!target || users.length < 2) {
+      setCarRoutesLoading(false);
       return;
     }
     let cancelled = false;
+    setCarRoutesLoading(true);
     const coordinates = users.map((u) => ({ lat: u.lat, lon: u.lon }));
     Promise.all(
       coordinates.map((start) =>
         fetch('/api/driving-route', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ start, end: car }),
+          body: JSON.stringify({ start, end: target }),
         })
           .then((r) => (r.ok ? r.json() : null))
           .then((data: { coordinates?: Array<[number, number]> } | null) =>
@@ -188,20 +228,21 @@ export default function TripPage() {
     ).then((results) => {
       if (!cancelled) {
         const valid = results.filter((r): r is Array<[number, number]> => Array.isArray(r) && r.length >= 2);
+        // #region agent log
+        if (typeof fetch !== 'undefined') fetch('http://127.0.0.1:7244/ingest/8e2c6a3c-7e89-4fc0-8b62-983893625af2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'trip/page.tsx:route-effect-then',message:'Route fetch completed',data:{validLen:valid.length,resultsLen:results.length,firstNull:results[0]==null},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H2',runId:'post-fix'})}).catch(()=>{});
+        // #endregion
         setCarRoutePolylines(valid);
+        setCarRoutesLoading(false);
         if (valid.length === 0 && results.length > 0 && typeof console !== 'undefined' && console.warn) {
           console.warn('Car routes could not be loaded. Ensure OPENROUTESERVICE_API_KEY is set in .env and the Directions API is available.');
         }
       }
     });
-    return () => { cancelled = true; };
-  }, [trip?.id, trip?.users?.length, carMidpoint?.lat, carMidpoint?.lon]);
-
-  // Display midpoint: car uses API result or geographic fallback; else geographic (incl. legacy train / URL fallback)
-  const midpoint =
-    effectiveTransportMode === 'car'
-      ? (apiMidpoint ?? geographicMidpoint)
-      : geographicMidpoint;
+    return () => {
+      cancelled = true;
+      setCarRoutesLoading(false);
+    };
+  }, [effectiveTransportMode, trip?.id, trip?.users?.length, carTarget?.lat, carTarget?.lon]);
 
   // Convert users to map points
   const mapPoints: MapPoint[] = useMemo(() => {
@@ -445,6 +486,11 @@ export default function TripPage() {
                 Map View
               </h2>
               {mapPoints.length > 0 && midpoint ? (
+                (() => {
+                  // #region agent log
+                  if (typeof fetch !== 'undefined') fetch('http://127.0.0.1:7244/ingest/8e2c6a3c-7e89-4fc0-8b62-983893625af2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'trip/page.tsx:MapDisplay-props',message:'MapDisplay render',data:{effectiveTransportMode,hasCarTarget:!!carTarget,carRoutePolylinesLen:carRoutePolylines.length,passingPolylines:effectiveTransportMode==='car'&&carRoutePolylines.length>0},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H3'})}).catch(()=>{});
+                  // #endregion
+                  return (
                 <MapDisplay
                   startpoints={mapPoints}
                   midpoint={midpoint}
@@ -452,12 +498,15 @@ export default function TripPage() {
                   restaurants={places}
                   midpointsByMode={{
                     geographic: geographicMidpoint ?? undefined,
-                    car: carMidpoint ?? undefined,
+                    car: carTarget ?? undefined,
                   }}
                   showGeographicLine={effectiveTransportMode !== 'car'}
                   showCarLine={effectiveTransportMode === 'car'}
-                  carRoutePolylines={carRoutePolylines.length > 0 ? carRoutePolylines : undefined}
+                  carRoutePolylines={effectiveTransportMode === 'car' ? (carRoutePolylines.length > 0 ? carRoutePolylines : undefined) : undefined}
+                  carRoutesLoading={effectiveTransportMode === 'car' ? carRoutesLoading : false}
                 />
+                  );
+                })()
               ) : (
                 <div className="h-[500px] flex items-center justify-center border border-gray-300 rounded-lg bg-gray-50">
                   <div className="text-center text-gray-500">
@@ -466,11 +515,39 @@ export default function TripPage() {
                 </div>
               )}
 
+              {effectiveTransportMode === 'car' && carRoutesLoading && (
+                <div className="mt-2 flex items-center justify-center gap-2 text-sm text-gray-500">
+                  <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                  <span>Calculating car routes…</span>
+                </div>
+              )}
+
               {/* Midpoint Info */}
               {midpoint && (
                 <div className="mt-4 p-4 bg-blue-50 rounded-md border border-blue-200">
                   <div className="text-sm font-medium text-blue-900">
-                    Midpoint Calculated
+                    Midpoint Calculated{' '}
+                    <span className="font-normal text-blue-700">
+                      ({effectiveTransportMode === 'car'
+                        ? (() => {
+                            // #region agent log
+                            if (typeof fetch !== 'undefined') fetch('http://127.0.0.1:7244/ingest/8e2c6a3c-7e89-4fc0-8b62-983893625af2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'trip/page.tsx:midpoint-render',message:'Car midpoint label render',data:{carMode:true,travelTimesNull:carTravelTimesSeconds==null,travelTimesLength:carTravelTimesSeconds?.length??null},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H2'})}).catch(()=>{});
+                            // #endregion
+                            if (!carTravelTimesSeconds || carTravelTimesSeconds.length === 0)
+                              return 'car route';
+                            const meanSec =
+                              carTravelTimesSeconds.reduce((a, b) => a + b, 0) / carTravelTimesSeconds.length;
+                            const meanMin = meanSec / 60;
+                            const hh = Math.floor(meanMin / 60);
+                            const mm = Math.round(meanMin % 60);
+                            const maxDeviationSec = Math.max(
+                              ...carTravelTimesSeconds.map((s) => Math.abs(s - meanSec))
+                            );
+                            const deviationMin = Math.round(maxDeviationSec / 60);
+                            return `car route: ${hh}:${mm.toString().padStart(2, '0')} (+/- ${deviationMin})`;
+                          })()
+                        : 'spheric center'})
+                    </span>
                   </div>
                   <div className="text-xs text-blue-700 mt-1">
                     {midpoint.lat.toFixed(6)}, {midpoint.lon.toFixed(6)}

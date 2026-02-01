@@ -50,9 +50,10 @@ export async function POST(request: NextRequest) {
 
     if (!res.ok) {
       const text = await res.text();
+      console.error('OpenRouteService directions failed:', res.status, text.slice(0, 300));
       return NextResponse.json(
-        { error: 'OpenRouteService directions failed', details: text.slice(0, 200) },
-        { status: 502 }
+        { coordinates: [] },
+        { status: 200 }
       );
     }
 
@@ -70,10 +71,8 @@ export async function POST(request: NextRequest) {
       data.features?.[0]?.geometry?.coordinates ??
       (data.type === 'Feature' && data.geometry?.coordinates ? data.geometry.coordinates : null);
     if (!Array.isArray(coords) || coords.length < 2) {
-      return NextResponse.json(
-        { error: 'No route geometry in response' },
-        { status: 502 }
-      );
+      console.warn('OpenRouteService: no route geometry in response');
+      return NextResponse.json({ coordinates: [] }, { status: 200 });
     }
 
     // Convert [lon, lat] (or [lon, lat, elev]) to [lat, lon] for Leaflet

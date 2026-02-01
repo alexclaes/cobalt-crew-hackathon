@@ -49,6 +49,8 @@ interface MapDisplayProps {
   showTrainLine?: boolean;
   /** Actual driving route polylines (start → car midpoint) for each startpoint. [lat, lon][] per route. */
   carRoutePolylines?: Array<Array<[number, number]>>;
+  /** When true, car routes are still being fetched; don't draw car lines until done. */
+  carRoutesLoading?: boolean;
 }
 
 const PLACE_TYPE_LABELS: Record<PlaceType, string> = {
@@ -215,8 +217,9 @@ interface MapContentProps {
   showCarLine?: boolean;
   showTrainLine?: boolean;
   carRoutePolylines?: Array<Array<[number, number]>>;
+  carRoutesLoading?: boolean;
 }
-function MapContent({ startpoints, midpoint, radiusKm, restaurants, allPoints, restaurantPoints, midpointsByMode, showGeographicLine = true, showCarLine = true, showTrainLine = true, carRoutePolylines }: MapContentProps) {
+function MapContent({ startpoints, midpoint, radiusKm, restaurants, allPoints, restaurantPoints, midpointsByMode, showGeographicLine = true, showCarLine = true, showTrainLine = true, carRoutePolylines, carRoutesLoading }: MapContentProps) {
   const map = useMap();
   const [layersReady, setLayersReady] = useState(false);
   // Defer layers until next tick so map container/panes are in the DOM (fixes appendChild undefined)
@@ -264,7 +267,7 @@ function MapContent({ startpoints, midpoint, radiusKm, restaurants, allPoints, r
               pathOptions={{ color: LINE_COLORS.geographic, weight: 3, opacity: 0.8 }}
             />
           ))}
-          {showCarLine && midpointsByMode.car && (
+          {showCarLine && midpointsByMode.car && !carRoutesLoading && (
             carRoutePolylines && carRoutePolylines.length > 0
               ? carRoutePolylines.map((positions, i) => (
                   <Polyline
@@ -393,7 +396,7 @@ function MapContent({ startpoints, midpoint, radiusKm, restaurants, allPoints, r
   );
 }
 
-function MapDisplay({ startpoints, midpoint, radiusKm = DEFAULT_RADIUS_KM, restaurants = [], midpointsByMode, showGeographicLine = true, showCarLine = true, showTrainLine = true, carRoutePolylines }: MapDisplayProps) {
+function MapDisplay({ startpoints, midpoint, radiusKm = DEFAULT_RADIUS_KM, restaurants = [], midpointsByMode, showGeographicLine = true, showCarLine = true, showTrainLine = true, carRoutePolylines, carRoutesLoading }: MapDisplayProps) {
   const [isMounted, setIsMounted] = useState(false);
   const mapRef = useRef<L.Map | null>(null);
   const containerKeyRef = useRef(Math.random().toString(36).substring(7));
@@ -471,6 +474,7 @@ function MapDisplay({ startpoints, midpoint, radiusKm = DEFAULT_RADIUS_KM, resta
           showCarLine={showCarLine}
           showTrainLine={showTrainLine}
           carRoutePolylines={carRoutePolylines}
+          carRoutesLoading={carRoutesLoading}
         />
       </MapContainer>
     </div>
@@ -537,6 +541,7 @@ export default memo(MapDisplay, (prevProps, nextProps) => {
   // Which lines to show (chosen transport mode)
   if (prevProps.showGeographicLine !== nextProps.showGeographicLine) return false;
   if (prevProps.showCarLine !== nextProps.showCarLine) return false;
+  if (prevProps.carRoutesLoading !== nextProps.carRoutesLoading) return false;
 
   return true; // All props are equal, skip re-render
 });

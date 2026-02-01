@@ -404,6 +404,17 @@ export default function Home() {
                     />
                     <span>Car</span>
                   </label>
+                  <label className="inline-flex items-center gap-2 cursor-not-allowed opacity-60 text-gray-500">
+                    <input
+                      type="radio"
+                      name="transport"
+                      checked={transportMode === 'train'}
+                      disabled
+                      readOnly
+                      className="text-gray-400 focus:ring-0 cursor-not-allowed"
+                    />
+                    <span>Train</span>
+                  </label>
                 </div>
                 {transportMode !== 'geographic' && users.length >= 2 && meetingPointLoading && (
                   <p className="text-sm text-gray-500 mt-1">Calculating fair meeting point…</p>
