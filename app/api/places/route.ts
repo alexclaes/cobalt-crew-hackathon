@@ -12,7 +12,7 @@ const USER_AGENT = 'CobaltCrewHackathon/1.0 (meetup midpoint finder)';
 
 export type { PlaceType };
 
-export interface RestaurantResult {
+export interface PlaceResult {
   id: string;
   name: string;
   lat: number;
@@ -62,10 +62,10 @@ function getLatLon(el: OverpassElement): { lat: number; lon: number } | null {
   return null;
 }
 
-function elementToRestaurant(
+function elementToPlace(
   el: OverpassElement,
   center: { lat: number; lon: number }
-): RestaurantResult | null {
+): PlaceResult | null {
   const pos = getLatLon(el);
   if (!pos) return null;
   const tags = el.tags ?? {};
@@ -162,7 +162,7 @@ out center;
       const center = { lat: latNum, lon: lonNum };
 
       // Group results by type and limit per category
-      const resultsByType: Partial<Record<PlaceType, RestaurantResult[]>> = {};
+      const resultsByType: Partial<Record<PlaceType, PlaceResult[]>> = {};
 
       for (const el of data.elements) {
         const tags = el.tags ?? {};
@@ -188,7 +188,7 @@ out center;
           if (!resultsByType[placeType]) {
             resultsByType[placeType] = [];
           }
-          const r = elementToRestaurant(el, center);
+          const r = elementToPlace(el, center);
           if (r) {
             resultsByType[placeType]!.push(r);
           }
@@ -197,7 +197,7 @@ out center;
 
       // Sort each category by distance and limit
       const MAX_PER_CATEGORY = 5;
-      const allResults: Array<RestaurantResult & { type: PlaceType }> = [];
+      const allResults: Array<PlaceResult & { type: PlaceType }> = [];
       
       for (const placeType of requestedTypes) {
         const places = resultsByType[placeType] || [];
