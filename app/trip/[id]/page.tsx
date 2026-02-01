@@ -3,6 +3,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { useParams } from 'next/navigation';
+import { Plus, Share2 } from 'lucide-react';
+import { FloatingStickers } from '@/components/FloatingStickers';
 import MatesList from '@/components/MatesList';
 import Recommendation from '@/components/Recommendation';
 import { calculateMidpoint, getDefaultRadiusKm, haversineDistanceKm, Coordinate } from '@/lib/midpoint';
@@ -21,10 +23,10 @@ function getTripTitle(trip: Trip | null): string {
 const MapDisplay = dynamic(() => import('@/components/MapDisplay'), {
   ssr: false,
   loading: () => (
-    <div className="h-[500px] flex items-center justify-center border border-gray-300 rounded-lg bg-gray-50">
-      <div className="text-center text-gray-500">
-        <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-        <p>Loading map...</p>
+    <div className="h-[500px] flex items-center justify-center border-[3px] border-black rounded-lg bg-white">
+      <div className="text-center">
+        <div className="w-8 h-8 border-4 border-black border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+        <p className="text-black font-mono">Loading map...</p>
       </div>
     </div>
   ),
@@ -356,12 +358,13 @@ export default function TripPage() {
   // Loading state
   if (isLoading) {
     return (
-      <main className="min-h-screen bg-gray-50 py-8 px-4">
-        <div className="max-w-6xl mx-auto">
+      <main className="min-h-screen bg-[#ffb6c1] py-8 px-4 relative overflow-hidden">
+        <FloatingStickers />
+        <div className="max-w-6xl mx-auto relative z-10">
           <div className="flex items-center justify-center py-20">
             <div className="text-center">
-              <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-              <p className="text-gray-600">Loading trip...</p>
+              <div className="w-16 h-16 border-4 border-black border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-black font-mono">Loading trip...</p>
             </div>
           </div>
         </div>
@@ -372,34 +375,37 @@ export default function TripPage() {
   // Error state
   if (error || !trip) {
     return (
-      <main className="min-h-screen bg-gray-50 py-8 px-4">
-        <div className="max-w-6xl mx-auto">
+      <main className="min-h-screen bg-[#ffb6c1] py-8 px-4 relative overflow-hidden">
+        <FloatingStickers />
+        <div className="max-w-6xl mx-auto relative z-10">
           <div className="text-center py-20">
-            <svg
-              className="w-16 h-16 mx-auto mb-4 text-red-500"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">
-              {error || 'Trip not found'}
-            </h1>
-            <p className="text-gray-600 mb-6">
-              The trip you're looking for doesn't exist or has been removed.
-            </p>
-            <a
-              href="/"
-              className="inline-block px-6 py-3 bg-blue-600 text-white rounded-md font-medium hover:bg-blue-700 transition-colors"
-            >
-              Create a New Trip
-            </a>
+            <div className="bg-white border-[3px] border-black rounded-2xl p-8 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] inline-block">
+              <svg
+                className="w-16 h-16 mx-auto mb-4 text-[#ff1493]"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              <h1 className="text-2xl font-bold text-black mb-2 font-sans">
+                {error || 'Trip not found'}
+              </h1>
+              <p className="text-black/70 mb-6 font-mono text-sm">
+                The trip you're looking for doesn't exist or has been removed.
+              </p>
+              <a
+                href="/"
+                className="inline-block px-6 py-3 bg-[#ff1493] text-white rounded-lg font-mono font-bold border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+              >
+                Create a New Trip
+              </a>
+            </div>
           </div>
         </div>
       </main>
@@ -407,38 +413,27 @@ export default function TripPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 py-8 px-4">
-      <div className="max-w-6xl mx-auto">
+    <main className="min-h-screen bg-[#ffb6c1] py-8 px-4 relative overflow-hidden">
+      <FloatingStickers />
+      <div className="max-w-6xl mx-auto relative z-10">
         {/* Header */}
         <div className="relative text-center mb-8">
           {/* New Trip Button - Top Left */}
           <a
             href="/"
-            className="absolute top-0 left-0 flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md font-medium hover:bg-gray-700 transition-colors shadow-md"
+            className="absolute top-0 left-0 flex items-center gap-2 px-4 py-2 bg-white text-black rounded-full font-mono font-medium border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
           >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 4v16m8-8H4"
-              />
-            </svg>
+            <Plus className="w-4 h-4" />
             New Trip
           </a>
           
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">
+          <h1 className="text-4xl font-bold text-black mb-2 font-sans">
             {getTripTitle(trip)}
           </h1>
-          <p className="text-gray-600">
+          <p className="text-black/70 font-mono text-sm">
             View your trip details and the calculated midpoint
           </p>
-          <div className="mt-2 text-sm text-gray-500">
+          <div className="mt-2 text-xs text-black/50 font-mono">
             Trip ID: {trip.id}
           </div>
           
@@ -450,30 +445,18 @@ export default function TripPage() {
               );
               alert('Link copied to clipboard!');
             }}
-            className="absolute top-0 right-0 flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md font-medium hover:bg-blue-700 transition-colors shadow-md"
+            className="absolute top-0 right-0 flex items-center gap-2 px-4 py-2 bg-[#4361ee] text-white rounded-full font-mono font-medium border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
           >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
-              />
-            </svg>
+            <Share2 className="w-4 h-4" />
             Share Trip
           </button>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Left Column: Map and Radius Slider */}
           <div className="space-y-6">
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <h2 className="text-xl font-semibold text-gray-800 mb-4">
+            <div className="bg-white rounded-2xl border-[3px] border-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] p-6">
+              <h2 className="text-xl font-bold text-black mb-4 font-sans">
                 Map View
               </h2>
               {mapPoints.length > 0 && midpoint ? (
@@ -489,8 +472,8 @@ export default function TripPage() {
                   )}
                 />
               ) : (
-                <div className="h-[500px] flex items-center justify-center border border-gray-300 rounded-lg bg-gray-50">
-                  <div className="text-center text-gray-500">
+                <div className="h-[500px] flex items-center justify-center border-[3px] border-black/20 rounded-lg bg-white">
+                  <div className="text-center text-black/60 font-mono">
                     <p>No locations to display</p>
                   </div>
                 </div>
@@ -498,11 +481,11 @@ export default function TripPage() {
 
               {/* Midpoint Info */}
               {midpoint && (
-                <div className="mt-4 p-4 bg-blue-50 rounded-md border border-blue-200">
-                  <div className="text-sm font-medium text-blue-900">
+                <div className="mt-4 p-4 bg-[#7DF9FF]/30 rounded-lg border-[2px] border-[#7DF9FF]">
+                  <div className="text-sm font-bold text-black font-mono">
                     Midpoint Calculated
                   </div>
-                  <div className="text-xs text-blue-700 mt-1">
+                  <div className="text-xs text-black/70 mt-1 font-mono">
                     {midpoint.lat.toFixed(6)}, {midpoint.lon.toFixed(6)}
                   </div>
                 </div>
@@ -510,9 +493,9 @@ export default function TripPage() {
 
               {/* Radius Slider */}
               {midpoint && (
-                <div className="mt-6 pt-4 border-t border-gray-200 space-y-4">
+                <div className="mt-6 pt-4 border-t-[3px] border-black/10 space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-bold text-black mb-2 font-mono">
                       Search radius: {radiusKm} km
                     </label>
                     <input
@@ -524,9 +507,12 @@ export default function TripPage() {
                       onChange={(e) => setRadiusKm(Number(e.target.value))}
                       onMouseUp={(e) => setFetchRadiusKm(Number((e.target as HTMLInputElement).value))}
                       onTouchEnd={(e) => setFetchRadiusKm(Number((e.target as HTMLInputElement).value))}
-                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                      className="w-full h-3 bg-black/10 rounded-lg appearance-none cursor-pointer"
+                      style={{
+                        accentColor: '#ff1493',
+                      }}
                     />
-                    <div className="flex justify-between text-xs text-gray-500 mt-1">
+                    <div className="flex justify-between text-xs text-black/50 mt-1 font-mono">
                       <span>1 km</span>
                       <span>100 km</span>
                     </div>
@@ -535,15 +521,15 @@ export default function TripPage() {
 
                   {/* Places Loading Indicator */}
                   {placesLoading && (
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                    <div className="flex items-center gap-2 text-sm text-black/70 font-mono">
+                      <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
                       <span>Loading places...</span>
                     </div>
                   )}
 
                   {/* Places Count */}
                   {places.length > 0 && !placesLoading && (
-                    <div className="text-sm text-gray-600">
+                    <div className="text-sm text-black/70 font-mono">
                       Found {places.length} place{places.length !== 1 ? 's' : ''} within {fetchRadiusKm} km
                     </div>
                   )}
