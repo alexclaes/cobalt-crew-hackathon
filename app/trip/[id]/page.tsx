@@ -13,11 +13,18 @@ import type { MapPoint, Restaurant, PlaceType } from '@/components/MapDisplay';
 import type { Trip } from '@/types/trip';
 import { getPlaceTypesForTheme } from '@/lib/theme-place-types';
 
-function getTripTitle(trip: Trip | null): string {
+function getTripTitle(trip: Trip | null): JSX.Element {
   if (!trip || !trip.theme) {
-    return 'Trip Planning';
+    return <>Trip Planning</>;
   }
-  return `${trip.theme.icon} ${trip.theme.name} Trip Planning`;
+  return (
+    <>
+      <span className="inline-flex items-center justify-center w-16 h-16 bg-white border-[3px] border-black rounded-full mr-3 p-3">
+        {trip.theme.icon}
+      </span>
+      {trip.theme.name} Trip Planning
+    </>
+  );
 }
 
 // Dynamically import MapDisplay with SSR disabled
