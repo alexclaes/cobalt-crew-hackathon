@@ -14,7 +14,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Weekend Trip Planner",
+  title: "MidWay",
   description: "Plan a weekend trip with friends – find the midpoint and nearby cities.",
 };
 
