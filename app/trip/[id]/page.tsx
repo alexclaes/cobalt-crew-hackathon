@@ -2,14 +2,14 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import dynamic from 'next/dynamic';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { Plus, Share2 } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { FloatingStickers } from '@/components/FloatingStickers';
 import MatesList from '@/components/MatesList';
 import Recommendation from '@/components/Recommendation';
 import { calculateMidpoint, getDefaultRadiusKm, haversineDistanceKm, Coordinate } from '@/lib/midpoint';
-import type { MapPoint, Restaurant } from '@/components/MapDisplay';
+import type { MapPoint, Restaurant, MidpointsByMode } from '@/components/MapDisplay';
 import type { Trip } from '@/types/trip';
 import { getPlaceTypesForTheme, type PlaceType } from '@/lib/theme-place-types';
 
@@ -59,6 +59,7 @@ const MapDisplay = dynamic(() => import('@/components/MapDisplay'), {
 
 export default function TripPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const tripId = params.id as string;
 
   const [trip, setTrip] = useState<Trip | null>(null);
@@ -80,6 +81,13 @@ export default function TripPage() {
   const lastEnrichedKeyRef = useRef<string | null>(null);
   const hasStoredRecommendationsRef = useRef<Set<PlaceType>>(new Set());
   const previousPlacesIdsRef = useRef<string>('');
+  
+  // Route visualization states
+  const [apiMidpoint, setApiMidpoint] = useState<{ lat: number; lon: number } | null>(null);
+  const [meetingPointLoading, setMeetingPointLoading] = useState(false);
+  const [carMidpoint, setCarMidpoint] = useState<{ lat: number; lon: number } | null>(null);
+  const [carRoutePolylines, setCarRoutePolylines] = useState<Array<Array<[number, number]>>>([]);
+  const [carRoutesLoading, setCarRoutesLoading] = useState(false);
 
   // Place types are now always all three - no toggle needed
 
@@ -247,7 +255,19 @@ export default function TripPage() {
   }, [tripId]);
 
   // Calculate midpoint from trip users
-  const midpoint = useMemo(() => {
+  // Use trip.transportMode from API, or fallback to URL param so the chosen mode shows
+  const urlTransportMode = searchParams.get('transportMode');
+  
+  const effectiveTransportMode = useMemo(() => {
+    return trip?.transportMode ?? (urlTransportMode === 'car' ? 'car' : 'geographic');
+  }, [trip?.transportMode, urlTransportMode]);
+  
+  const wantCarMeetingPoint = useMemo(() => {
+    return effectiveTransportMode === 'car';
+  }, [effectiveTransportMode]);
+
+  // Geographic midpoint (always calculate for reference)
+  const geographicMidpoint = useMemo(() => {
     if (!trip || trip.users.length < 2) {
       return null;
     }
@@ -258,6 +278,17 @@ export default function TripPage() {
     return calculateMidpoint(coordinates);
   }, [trip]);
 
+  // Display midpoint: use car-based midpoint if that mode is active, otherwise geographic
+  const midpoint = effectiveTransportMode === 'car' && apiMidpoint 
+    ? apiMidpoint 
+    : geographicMidpoint;
+
+  // Midpoints by mode for map visualization
+  const midpointsByMode = useMemo(() => ({
+    geographic: geographicMidpoint ?? undefined,
+    car: carMidpoint ?? undefined,
+  }), [geographicMidpoint, carMidpoint]);
+
   // Convert users to map points
   const mapPoints: MapPoint[] = useMemo(() => {
     if (!trip) return [];
@@ -267,6 +298,95 @@ export default function TripPage() {
       label: user.name,
     }));
   }, [trip]);
+
+  // When trip has car transport: fetch travel-time–fair meeting point
+  useEffect(() => {
+    if (!trip || trip.users.length < 2 || !wantCarMeetingPoint) {
+      setApiMidpoint(null);
+      return;
+    }
+    let cancelled = false;
+    setMeetingPointLoading(true);
+    const coordinates = trip.users.map((u) => ({ lat: u.lat, lon: u.lon }));
+    fetch('/api/meeting-point', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ coordinates, transport: 'car' }),
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error(res.statusText);
+        return res.json();
+      })
+      .then((data: { lat: number; lon: number }) => {
+        if (!cancelled) setApiMidpoint({ lat: data.lat, lon: data.lon });
+      })
+      .catch(() => {
+        if (!cancelled) setApiMidpoint(null);
+      })
+      .finally(() => {
+        if (!cancelled) setMeetingPointLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [trip?.id, trip?.users?.length, wantCarMeetingPoint]);
+
+  // Fetch car meeting point for drawing car lines (always fetch for visual comparison)
+  useEffect(() => {
+    const users = trip?.users ?? [];
+    if (!trip || users.length < 2) {
+      setCarMidpoint(null);
+      return;
+    }
+    const coordinates = users.map((u) => ({ lat: u.lat, lon: u.lon }));
+    let cancelled = false;
+    fetch('/api/meeting-point', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ coordinates, transport: 'car' }),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { lat: number; lon: number } | null) => {
+        if (!cancelled && data) setCarMidpoint(data);
+      })
+      .catch(() => null);
+    return () => { cancelled = true; };
+  }, [trip?.id, trip?.users]);
+
+  // Fetch driving route geometry from each startpoint to car midpoint
+  useEffect(() => {
+    const users = trip?.users ?? [];
+    const car = carMidpoint;
+    if (!car || users.length < 2) {
+      setCarRoutePolylines([]);
+      return;
+    }
+    let cancelled = false;
+    const coordinates = users.map((u) => ({ lat: u.lat, lon: u.lon }));
+    setCarRoutesLoading(true);
+    Promise.all(
+      coordinates.map((start) =>
+        fetch('/api/driving-route', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ start, end: car }),
+        })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((data: { coordinates?: Array<[number, number]> } | null) => data?.coordinates ?? null)
+          .catch(() => null)
+      )
+    )
+      .then((routes) => {
+        if (!cancelled) {
+          const validRoutes = routes.filter((r): r is Array<[number, number]> => r !== null);
+          setCarRoutePolylines(validRoutes);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setCarRoutesLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [trip?.id, carMidpoint, trip?.users]);
 
   // Set default radius based on trip scale
   useEffect(() => {
@@ -712,6 +832,12 @@ export default function TripPage() {
                       .filter(rec => rec?.current?.place?.id)
                       .map(rec => rec!.current!.place!.id)
                   )}
+                  midpointsByMode={midpointsByMode}
+                  showGeographicLine={true}
+                  showCarLine={true}
+                  showTrainLine={false}
+                  carRoutePolylines={carRoutePolylines}
+                  carRoutesLoading={carRoutesLoading}
                 />
               ) : (
                 <div className="h-[500px] flex items-center justify-center border-[3px] border-black/20 rounded-lg bg-white">
