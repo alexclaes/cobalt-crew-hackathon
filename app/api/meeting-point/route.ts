@@ -159,6 +159,7 @@ export async function POST(request: NextRequest) {
     }
 
     const n = coords.length;
+    const finalApiKey = apiKey; // Create a const that TypeScript knows is defined
 
     /** Request travel-time matrix for candidate points, then pick candidate that minimizes range (max - min). */
     async function bestFromCandidates(candidates: Coordinate[]): Promise<{
@@ -177,7 +178,7 @@ export async function POST(request: NextRequest) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: apiKey,
+          Authorization: finalApiKey,
         },
         body: JSON.stringify({
           locations,
@@ -249,7 +250,7 @@ export async function POST(request: NextRequest) {
         result.travelTimes.reduce((a, b) => a + b, 0) / result.travelTimes.length;
       const positionsAtAvgTime: Coordinate[] = [];
       for (let i = 0; i < n; i++) {
-        const geometry = await fetchRouteGeometry(apiKey, coords[i], result.chosen);
+        const geometry = await fetchRouteGeometry(finalApiKey, coords[i], result.chosen);
         const totalDur = result.travelTimes[i];
         if (!geometry || totalDur <= 0) {
           positionsAtAvgTime.push(result.chosen);
