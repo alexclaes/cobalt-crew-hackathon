@@ -35,12 +35,36 @@ function getTripTitle(trip: Trip | null): React.ReactElement {
     return <>Trip Planning</>;
   }
   return (
-    <>
-      <span className="inline-flex items-center justify-center w-16 h-16 bg-white border-[3px] border-black rounded-full mr-3 p-3">
+    <span className="inline-flex items-center justify-center relative">
+      {/* Lightning sticker on the left - positioned a little below the title, rotated 30 degrees, bigger, hidden on desktop */}
+      <span className="absolute -left-10 sm:-left-12 md:hidden top-[60%] sm:top-[65%] z-0 pointer-events-none rotate-[15deg]">
+        <svg viewBox="0 0 30 50" className="w-5 h-8 sm:w-6 sm:h-10">
+          <path d="M15 0 L5 20 L15 20 L5 50 L25 25 L15 25 L25 0 Z" fill="#ffe135" stroke="black" strokeWidth="2" />
+        </svg>
+      </span>
+      
+      <span className="inline-flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 bg-white border-[3px] border-black rounded-full mr-3 p-2 sm:p-3">
         {trip.theme.icon}
       </span>
-      {trip.theme.name} Trip Planning
-    </>
+      <span className="relative">
+        {trip.theme.name} Trip Planning
+        {/* Heart sticker on the right side of the text - positioned a little above */}
+        <span className="absolute -right-6 sm:-right-8 md:-right-10 top-[-20%] sm:top-[-25%] md:top-[-30%] z-0 pointer-events-none">
+          <svg viewBox="0 0 24 24" className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 fill-[#ff69b4] stroke-black stroke-2">
+            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+          </svg>
+        </span>
+        {/* Sparkle below the heart - positioned with some space */}
+        <span className="absolute -right-4 sm:-right-6 md:-right-8 top-[120%] sm:top-[130%] md:top-[140%] z-0 pointer-events-none">
+          <svg viewBox="0 0 20 20" className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5">
+            <path d="M10 0 L11 8 L10 10 L9 8 Z" fill="black" />
+            <path d="M10 20 L11 12 L10 10 L9 12 Z" fill="black" />
+            <path d="M0 10 L8 9 L10 10 L8 11 Z" fill="black" />
+            <path d="M20 10 L12 9 L10 10 L12 11 Z" fill="black" />
+          </svg>
+        </span>
+      </span>
+    </span>
   );
 }
 
@@ -721,7 +745,7 @@ export default function TripPage() {
         <FloatingStickers />
         <div className="relative z-10">
           <Header />
-          <div className="max-w-6xl mx-auto px-4">
+          <div className="max-w-6xl mx-auto px-4 sm:px-4 md:px-6">
             <div className="flex items-center justify-center py-20">
               <div className="text-center">
                 <div className="w-16 h-16 border-4 border-black border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
@@ -741,11 +765,11 @@ export default function TripPage() {
         <FloatingStickers />
         <div className="relative z-10">
           <Header />
-          <div className="max-w-6xl mx-auto px-4">
-            <div className="text-center py-20">
-              <div className="bg-white border-[3px] border-black rounded-2xl p-8 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] inline-block">
+          <div className="max-w-6xl mx-auto px-4 sm:px-4 md:px-6">
+            <div className="text-center py-12 sm:py-20">
+              <div className="bg-white border-[3px] border-black rounded-2xl p-6 sm:p-8 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] inline-block max-w-full mx-4">
                 <svg
-                  className="w-16 h-16 mx-auto mb-4 text-[#ff1493]"
+                  className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-4 text-[#ff1493]"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -757,15 +781,15 @@ export default function TripPage() {
                     d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                   />
                 </svg>
-                <h1 className="text-2xl font-bold text-black mb-2 font-sans">
+                <h1 className="text-xl sm:text-2xl font-bold text-black mb-2 font-sans">
                   {error || 'Trip not found'}
                 </h1>
-                <p className="text-black/70 mb-6 font-mono text-sm">
+                <p className="text-black/70 mb-6 font-mono text-xs sm:text-sm">
                   The trip you're looking for doesn't exist or has been removed.
                 </p>
                 <a
                   href="/"
-                  className="inline-block px-6 py-3 bg-[#ff1493] text-white rounded-lg font-mono font-bold border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+                  className="inline-block px-4 sm:px-6 py-2 sm:py-3 bg-[#ff1493] text-white rounded-lg font-mono font-bold border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all text-sm sm:text-base"
                 >
                   Create a New Trip
                 </a>
@@ -782,15 +806,15 @@ export default function TripPage() {
       <FloatingStickers />
       <div className="relative z-10">
         <Header />
-        <div className="max-w-6xl mx-auto px-4 pb-8">
+        <div className="max-w-6xl mx-auto px-4 sm:px-4 md:px-6 pb-8">
           {/* Header */}
-          <div className="mb-8">
-            {/* Buttons Row */}
-            <div className="flex items-center justify-between mb-6">
+          <div className="mb-6 sm:mb-8">
+            {/* Buttons Row - Hidden on mobile, shown on desktop */}
+            <div className="hidden sm:flex items-center justify-between gap-3 mb-4 sm:mb-6">
               {/* New Trip Button */}
               <a
                 href="/"
-                className="flex items-center gap-2 px-4 py-2 bg-white text-black rounded-full font-mono font-medium border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+                className="flex items-center justify-center gap-2 px-4 py-2 bg-white text-black rounded-full font-mono font-medium border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all text-sm sm:text-base"
               >
                 <Plus className="w-4 h-4" />
                 New Trip
@@ -804,7 +828,7 @@ export default function TripPage() {
                   );
                   alert('Link copied to clipboard!');
                 }}
-                className="flex items-center gap-2 px-4 py-2 bg-[#4361ee] text-white rounded-full font-mono font-medium border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+                className="flex items-center justify-center gap-2 px-4 py-2 bg-[#4361ee] text-white rounded-full font-mono font-medium border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all text-sm sm:text-base"
               >
                 <Share2 className="w-4 h-4" />
                 Share Trip
@@ -812,7 +836,7 @@ export default function TripPage() {
             </div>
             
             {/* Title */}
-            <h1 className="text-4xl font-bold text-black text-center font-sans">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-black text-center font-sans">
               {getTripTitle(trip)}
             </h1>
           </div>
@@ -820,7 +844,28 @@ export default function TripPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Left Column: Map and Radius Slider */}
           <div className="space-y-6">
-            <div className="bg-white rounded-2xl border-[3px] border-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] p-6">
+            <div className="bg-white rounded-2xl border-[3px] border-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] p-4 sm:p-6 relative overflow-visible">
+              {/* Decorative stickers in whitespace */}
+              {/* Top right corner sticker */}
+              <div className="absolute top-2 right-2 sm:top-3 sm:right-3 z-0 pointer-events-none rotate-12">
+                <div className="w-3 h-3 sm:w-4 sm:h-4 bg-[#4361ee] rounded-full border-[1.5px] sm:border-2 border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]" />
+              </div>
+              
+              {/* Bottom left corner sticker */}
+              <div className="absolute bottom-8 left-2 sm:bottom-8 sm:left-3 md:bottom-10 md:left-3 z-0 pointer-events-none -rotate-6">
+                <svg viewBox="0 0 24 24" className="w-4 h-4 sm:w-5 sm:h-5 fill-[#ff1493] stroke-black stroke-[1.5px]">
+                  <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+                </svg>
+              </div>
+
+              {/* Half circles peeking behind the card */}
+              {/* Left side - half circle - larger size */}
+              <div className="absolute -left-6 sm:-left-8 md:-left-10 top-1/3 z-[-1] pointer-events-none rotate-6">
+                <div className="w-14 h-14 sm:w-18 sm:h-18 md:w-24 md:h-24 bg-[#ffe135] rounded-full border-[2px] sm:border-[3px] border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]" />
+              </div>
+              
+              {/* Right side - half circle - removed to avoid overlap */}
+
               {mapPoints.length > 0 && midpoint ? (
                 <MapDisplay
                   startpoints={mapPoints}
@@ -897,7 +942,7 @@ export default function TripPage() {
 
                   {/* Places Count */}
                   {places.length > 0 && !placesLoading && (
-                    <div className="text-sm text-black/70 font-mono">
+                    <div className="text-sm text-black/70 font-mono mb-4 sm:mb-0">
                       Found {places.length} place{places.length !== 1 ? 's' : ''} within {fetchRadiusKm} km
                     </div>
                   )}
@@ -926,6 +971,32 @@ export default function TripPage() {
             />
             <MatesList users={trip.users} />
           </div>
+        </div>
+
+        {/* Buttons Row - Shown on mobile at bottom, hidden on desktop */}
+        <div className="flex sm:hidden flex-col items-stretch gap-3 mt-6 pb-8">
+          {/* New Trip Button */}
+          <a
+            href="/"
+            className="flex items-center justify-center gap-2 px-4 py-2 bg-white text-black rounded-full font-mono font-medium border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all text-sm"
+          >
+            <Plus className="w-4 h-4" />
+            New Trip
+          </a>
+          
+          {/* Share Button */}
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(
+                `${window.location.origin}/trip/${trip.id}`
+              );
+              alert('Link copied to clipboard!');
+            }}
+            className="flex items-center justify-center gap-2 px-4 py-2 bg-[#4361ee] text-white rounded-full font-mono font-medium border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all text-sm"
+          >
+            <Share2 className="w-4 h-4" />
+            Share Trip
+          </button>
         </div>
         </div>
       </div>

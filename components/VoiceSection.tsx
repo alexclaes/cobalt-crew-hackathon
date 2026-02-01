@@ -97,20 +97,20 @@ export function VoiceSection({
   };
 
   return (
-    <section className="relative z-10 mb-8 py-6">
-      <div className="max-w-2xl mx-auto px-4 flex flex-col items-center gap-4">
+    <section className="relative z-10 mb-6 sm:mb-8 py-4 sm:py-6">
+      <div className="max-w-2xl mx-auto px-4 flex flex-col items-center gap-3 sm:gap-4">
         {/* Voice CTA Button */}
         <VoiceButton
           state={state}
           onClick={isRecording ? stopListening : startListening}
           disabled={false}
           buttonText="Quick Start with Voice"
-          buttonClassName="bg-[#4361ee] text-white font-sans font-bold text-base px-8 py-4 rounded-full border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all flex items-center gap-3"
+          buttonClassName="bg-[#4361ee] text-white font-sans font-bold text-sm sm:text-base px-6 sm:px-8 py-3 sm:py-4 rounded-full border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all flex items-center gap-2 sm:gap-3 w-full sm:w-auto"
         />
 
         {/* Dynamic status message */}
         <p
-          className={`font-mono text-xs text-center italic min-h-[32px] flex items-center justify-center ${state === "error"
+          className={`font-mono text-[10px] sm:text-xs text-center italic min-h-[28px] sm:min-h-[32px] flex items-center justify-center px-2 ${state === "error"
             ? "text-red-600 font-semibold"
             : "text-black/70"
             }`}
@@ -120,7 +120,7 @@ export function VoiceSection({
 
         {/* Browser compatibility warning */}
         {!isSupported && state === "idle" && (
-          <p className="text-xs text-orange-600 text-center">
+          <p className="text-[10px] sm:text-xs text-orange-600 text-center px-2">
             ⚠️ Voice input not supported in this browser
           </p>
         )}
