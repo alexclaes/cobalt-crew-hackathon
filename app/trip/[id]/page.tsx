@@ -1,29 +1,40 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { useParams } from 'next/navigation';
+import { Plus, Share2 } from 'lucide-react';
+import { Header } from '@/components/Header';
+import { FloatingStickers } from '@/components/FloatingStickers';
 import MatesList from '@/components/MatesList';
 import Recommendation from '@/components/Recommendation';
 import { calculateMidpoint, getDefaultRadiusKm, haversineDistanceKm, Coordinate } from '@/lib/midpoint';
 import type { MapPoint, Restaurant, PlaceType } from '@/components/MapDisplay';
 import type { Trip } from '@/types/trip';
+import { getPlaceTypesForTheme } from '@/lib/theme-place-types';
 
-function getTripTitle(trip: Trip | null): string {
+function getTripTitle(trip: Trip | null): React.ReactElement {
   if (!trip || !trip.theme) {
-    return 'Trip Planning';
+    return <>Trip Planning</>;
   }
-  return `${trip.theme.icon} ${trip.theme.name} Trip Planning`;
+  return (
+    <>
+      <span className="inline-flex items-center justify-center w-16 h-16 bg-white border-[3px] border-black rounded-full mr-3 p-3">
+        {trip.theme.icon}
+      </span>
+      {trip.theme.name} Trip Planning
+    </>
+  );
 }
 
 // Dynamically import MapDisplay with SSR disabled
 const MapDisplay = dynamic(() => import('@/components/MapDisplay'), {
   ssr: false,
   loading: () => (
-    <div className="h-[500px] flex items-center justify-center border border-gray-300 rounded-lg bg-gray-50">
-      <div className="text-center text-gray-500">
-        <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-        <p>Loading map...</p>
+    <div className="h-[500px] flex items-center justify-center border-[3px] border-black rounded-lg bg-white">
+      <div className="text-center">
+        <div className="w-8 h-8 border-4 border-black border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+        <p className="text-black font-mono">Loading map...</p>
       </div>
     </div>
   ),
@@ -36,22 +47,23 @@ export default function TripPage() {
   const [trip, setTrip] = useState<Trip | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [radiusKm, setRadiusKm] = useState(50);
+  const [radiusKm, setRadiusKm] = useState(50); // Displayed radius (updates immediately)
+  const [fetchRadiusKm, setFetchRadiusKm] = useState(50); // Radius used for fetching (updates on release)
   const [places, setPlaces] = useState<Restaurant[]>([]);
   const [placesLoading, setPlacesLoading] = useState(false);
   const [enrichmentLoading, setEnrichmentLoading] = useState(false);
-  const [placeTypes, setPlaceTypes] = useState<PlaceType[]>(['restaurant']);
-  const [recommendation, setRecommendation] = useState<{ place: Restaurant; reasoning?: string } | null>(null);
-  const [isRegenerating, setIsRegenerating] = useState(false);
+  // Calculate place types based on trip theme
+  const placeTypes = useMemo(() => {
+    if (!trip?.theme?.name) return ['restaurant', 'bar', 'hotel'] as PlaceType[];
+    return getPlaceTypesForTheme(trip.theme.name);
+  }, [trip?.theme?.name]);
+  const [recommendations, setRecommendations] = useState<Record<string, { current: { place: Restaurant; reasoning?: string } | null; previous: { place: Restaurant; reasoning?: string } | null }>>({});
+  const [isRegenerating, setIsRegenerating] = useState<PlaceType | null>(null);
   const [hasNoRecommendation, setHasNoRecommendation] = useState(false);
   const lastEnrichedKeyRef = useRef<string | null>(null);
-  const hasStoredRecommendationRef = useRef(false);
+  const hasStoredRecommendationsRef = useRef<Set<PlaceType>>(new Set());
 
-  const togglePlaceType = (type: PlaceType) => {
-    setPlaceTypes((prev) =>
-      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
-    );
-  };
+  // Place types are now always all three - no toggle needed
 
   // Fetch trip data
   useEffect(() => {
@@ -61,7 +73,7 @@ export default function TripPage() {
         setError(null);
 
         const response = await fetch(`/api/trips/${tripId}`);
-        
+
         if (!response.ok) {
           if (response.status === 404) {
             setError('Trip not found');
@@ -73,15 +85,19 @@ export default function TripPage() {
 
         const tripData: Trip = await response.json();
         setTrip(tripData);
-        // Load stored recommendation if it exists
-        if (tripData.recommendation && tripData.recommendation.place) {
-          setRecommendation(tripData.recommendation);
-          setHasNoRecommendation(false);
-          hasStoredRecommendationRef.current = true;
+        // Load stored recommendations if they exist
+        if (tripData.recommendation) {
+          setRecommendations(tripData.recommendation);
+          // Track which categories have stored recommendations (check all categories in the recommendation object)
+          hasStoredRecommendationsRef.current = new Set();
+          for (const category in tripData.recommendation) {
+            if (tripData.recommendation[category]?.current) {
+              hasStoredRecommendationsRef.current.add(category as PlaceType);
+            }
+          }
         } else {
-          setRecommendation(null);
-          setHasNoRecommendation(false);
-          hasStoredRecommendationRef.current = false;
+          setRecommendations({});
+          hasStoredRecommendationsRef.current = new Set();
         }
         // Places will be loaded by the useEffect that checks metadata
       } catch (err) {
@@ -123,27 +139,42 @@ export default function TripPage() {
   useEffect(() => {
     if (midpoint && trip && trip.users.length >= 2) {
       const coordinates = trip.users.map((u) => ({ lat: u.lat, lon: u.lon }));
-      setRadiusKm(getDefaultRadiusKm(midpoint, coordinates));
+      const defaultRadius = getDefaultRadiusKm(midpoint, coordinates);
+      setRadiusKm(defaultRadius);
+      setFetchRadiusKm(defaultRadius);
     }
   }, [midpoint, trip]);
+
+  // Clear recommendations when fetch radius changes (new places = new recommendations needed)
+  const previousRadiusRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (previousRadiusRef.current !== null && previousRadiusRef.current !== fetchRadiusKm) {
+      // Fetch radius changed - clear stored recommendations and force re-enrichment
+      setRecommendations({});
+      hasStoredRecommendationsRef.current.clear();
+      lastEnrichedKeyRef.current = null;
+    }
+    previousRadiusRef.current = fetchRadiusKm;
+  }, [fetchRadiusKm]);
 
   // Fetch places for each selected type in parallel; merge, tag with type, sort by distance
   // First check if we have cached places that match current parameters
   useEffect(() => {
     if (!midpoint || placeTypes.length === 0 || !trip) {
       setPlaces([]);
-      setRecommendation(null);
       return;
     }
 
-    // Check if stored places match current parameters
+    // Check if stored places match current parameters (including theme)
     const storedMetadata = trip.placesMetadata;
     const placeTypesStr = placeTypes.slice().sort().join(',');
+    const themeName = trip.theme?.name || '';
     const metadataMatches = storedMetadata &&
       storedMetadata.midpointLat === midpoint.lat &&
       storedMetadata.midpointLon === midpoint.lon &&
-      storedMetadata.radiusKm === radiusKm &&
-      storedMetadata.placeTypes?.slice().sort().join(',') === placeTypesStr;
+      storedMetadata.radiusKm === fetchRadiusKm &&
+      storedMetadata.placeTypes?.slice().sort().join(',') === placeTypesStr &&
+      storedMetadata.themeName === themeName;
 
     // If we have matching cached places, use them (no loading spinner)
     if (metadataMatches && trip.places && Array.isArray(trip.places) && trip.places.length > 0) {
@@ -152,68 +183,53 @@ export default function TripPage() {
       return;
     }
 
-    // Otherwise, fetch from Overpass API
+    // Otherwise, fetch from Overpass API (single fetch for all types)
     let cancelled = false;
     setPlacesLoading(true);
 
-    const base = `/api/restaurants?lat=${midpoint.lat}&lon=${midpoint.lon}&radiusKm=${radiusKm}`;
-    const fetches = placeTypes.map((type) =>
-      fetch(`${base}&type=${type}`)
-        .then((r) => r.json())
-        .then((places) => ({ type, places }))
-    );
-
-    Promise.all(fetches)
-      .then((results) => {
+    const typesParam = placeTypes.join(',');
+    fetch(`/api/restaurants?lat=${midpoint.lat}&lon=${midpoint.lon}&radiusKm=${fetchRadiusKm}&types=${typesParam}`)
+      .then((r) => r.json())
+      .then((places: Restaurant[]) => {
         if (cancelled) return;
-        const merged: Restaurant[] = [];
-        for (const result of results) {
-          if (Array.isArray(result.places)) {
-            // Tag each place with its type
-            const tagged = result.places.map((place) => ({
-              ...place,
-              type: result.type,
-            }));
-            merged.push(...tagged);
+        // Places already have type from API
+        if (Array.isArray(places)) {
+          // Sort by distance from midpoint
+          places.sort(
+            (a, b) =>
+              haversineDistanceKm(midpoint, { lat: a.lat, lon: a.lon }) -
+              haversineDistanceKm(midpoint, { lat: b.lat, lon: b.lon })
+          );
+          setPlaces(places);
+
+          // Save places to database
+          if (tripId && places.length > 0) {
+            fetch(`/api/trips/${tripId}/places`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                places,
+                placesMetadata: {
+                  midpointLat: midpoint.lat,
+                  midpointLon: midpoint.lon,
+                  radiusKm: fetchRadiusKm,
+                  placeTypes: placeTypes.slice(),
+                  themeName: trip.theme?.name || '',
+                },
+              }),
+            }).catch((err) => {
+              console.error('Error saving places to database:', err);
+            });
           }
+        } else {
+          setPlaces([]);
         }
-        // Sort by distance from midpoint
-        merged.sort(
-          (a, b) =>
-            haversineDistanceKm(midpoint, { lat: a.lat, lon: a.lon }) -
-            haversineDistanceKm(midpoint, { lat: b.lat, lon: b.lon })
-        );
-        setPlaces(merged);
-        
-        // Save places to database
-        if (tripId && merged.length > 0) {
-          fetch(`/api/trips/${tripId}/places`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              places: merged,
-              placesMetadata: {
-                midpointLat: midpoint.lat,
-                midpointLon: midpoint.lon,
-                radiusKm,
-                placeTypes: placeTypes.slice(),
-              },
-            }),
-          }).catch((err) => {
-            console.error('Error saving places to database:', err);
-          });
-        }
-        
-        // Clear recommendation when places change (unless we have a stored one that matches)
-        if (!hasStoredRecommendationRef.current) {
-          setRecommendation(null);
-          setHasNoRecommendation(false);
-        }
+
+        // Recommendations are handled separately in the enrichment effect
       })
       .catch((err) => {
         console.error('Error fetching places:', err);
         setPlaces([]);
-        setRecommendation(null);
       })
       .finally(() => {
         if (!cancelled) setPlacesLoading(false);
@@ -222,14 +238,17 @@ export default function TripPage() {
     return () => {
       cancelled = true;
     };
-  }, [midpoint?.lat, midpoint?.lon, radiusKm, placeTypes.slice().sort().join(','), trip, tripId]);
+  }, [midpoint?.lat, midpoint?.lon, fetchRadiusKm, placeTypes.slice().sort().join(','), trip, tripId]);
 
   // Automatic enrichment: when places load (from Overpass), call OpenAI to add cost, rating, vegan/veg, etc.
   useEffect(() => {
     if (!midpoint || places.length === 0 || placesLoading) return;
 
-    // Skip AI enrichment entirely if we have a stored recommendation (unless regenerating)
-    if (hasStoredRecommendationRef.current && !isRegenerating) {
+    // Skip AI enrichment for categories that have stored recommendations (unless regenerating that category)
+    const needsEnrichment = placeTypes.some(type =>
+      !hasStoredRecommendationsRef.current.has(type) || isRegenerating === type
+    );
+    if (!needsEnrichment && !isRegenerating) {
       return;
     }
 
@@ -243,10 +262,10 @@ export default function TripPage() {
     fetch('/api/enrich-places', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ places, midpoint, radiusKm }),
+      body: JSON.stringify({ places, midpoint, radiusKm: fetchRadiusKm, placeTypes }),
     })
       .then((r) => r.json())
-      .then((response: { places?: Restaurant[]; recommendation?: { placeId: string; reasoning?: string } | null }) => {
+      .then((response: { places?: Restaurant[]; recommendations?: Record<string, { placeId: string | null; reasoning?: string }> }) => {
         if (!cancelled) {
           if (Array.isArray(response.places)) {
             setPlaces(response.places);
@@ -260,8 +279,9 @@ export default function TripPage() {
                   placesMetadata: {
                     midpointLat: midpoint.lat,
                     midpointLon: midpoint.lon,
-                    radiusKm,
+                    radiusKm: fetchRadiusKm,
                     placeTypes: placeTypes.slice(),
+                    themeName: trip?.theme?.name || '',
                   },
                 }),
               }).catch((err) => {
@@ -269,49 +289,69 @@ export default function TripPage() {
               });
             }
           }
-          if (response.recommendation && response.recommendation.placeId) {
-            // Find the full place data from enriched places
-            const recommendedPlace = response.places?.find(p => p.id === response.recommendation!.placeId);
-            if (recommendedPlace) {
-              const fullRecommendation = {
-                place: recommendedPlace,
-                reasoning: response.recommendation.reasoning,
-              };
-              setRecommendation(fullRecommendation);
-              setHasNoRecommendation(false);
-              hasStoredRecommendationRef.current = true;
-              // Save full recommendation to database
-              if (tripId) {
-                fetch(`/api/trips/${tripId}/recommendation`, {
-                  method: 'PUT',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ recommendation: fullRecommendation }),
-                }).catch(err => console.error('Error saving recommendation:', err));
+
+          // Process recommendations per category
+          if (response.recommendations) {
+            setRecommendations((prev) => {
+              const updated = { ...prev };
+
+              // Process recommendations for all place types in the theme
+              for (const category of placeTypes) {
+                const categoryRec = response.recommendations?.[category];
+                if (categoryRec && categoryRec.placeId) {
+                  // Find the full place data from enriched places
+                  const recommendedPlace = response.places?.find(p => p.id === categoryRec.placeId);
+                  if (recommendedPlace) {
+                    const fullRecommendation = {
+                      place: recommendedPlace,
+                      reasoning: categoryRec.reasoning,
+                    };
+
+                    // Store new recommendation (no history)
+                    const newCategoryRec = {
+                      current: fullRecommendation,
+                      previous: null, // History removed - always null
+                    };
+                    updated[category] = newCategoryRec;
+
+                    // Save to database
+                    if (tripId) {
+                      fetch(`/api/trips/${tripId}/recommendation`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          recommendation: fullRecommendation,
+                          category
+                        }),
+                      }).catch(err => console.error(`Error saving ${category} recommendation:`, err));
+                    }
+
+                    hasStoredRecommendationsRef.current.add(category);
+                  }
+                } else if (categoryRec && categoryRec.placeId === null && placeTypes.includes(category)) {
+                  // No recommendation for this category, but it was requested
+                  if (!updated[category]) {
+                    updated[category] = { current: null, previous: null };
+                  }
+                }
               }
-            }
+
+              return updated;
+            });
+            setHasNoRecommendation(false);
           } else {
-            setRecommendation(null);
             setHasNoRecommendation(true);
-            hasStoredRecommendationRef.current = false;
-            // Clear recommendation in database
-            if (tripId) {
-              fetch(`/api/trips/${tripId}/recommendation`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ recommendation: null }),
-              }).catch(err => console.error('Error clearing recommendation:', err));
-            }
           }
+
           lastEnrichedKeyRef.current = batchKey;
-          setIsRegenerating(false);
+          setIsRegenerating(null);
         }
       })
       .catch((err) => {
         console.error('Enrichment error:', err);
         if (!cancelled) {
-          setRecommendation(null);
           setHasNoRecommendation(true);
-          setIsRegenerating(false);
+          setIsRegenerating(null);
         }
       })
       .finally(() => {
@@ -321,17 +361,21 @@ export default function TripPage() {
     return () => {
       cancelled = true;
     };
-  }, [midpoint?.lat, midpoint?.lon, places.length, placesLoading, places.map((p) => p.id).sort().join(','), isRegenerating, tripId]);
+  }, [midpoint?.lat, midpoint?.lon, places.length, placesLoading, places.map((p) => p.id).sort().join(','), isRegenerating, tripId, placeTypes]);
 
   // Loading state
   if (isLoading) {
     return (
-      <main className="min-h-screen bg-gray-50 py-8 px-4">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex items-center justify-center py-20">
-            <div className="text-center">
-              <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-              <p className="text-gray-600">Loading trip...</p>
+      <main className="min-h-screen bg-[#ffb6c1] relative overflow-hidden">
+        <FloatingStickers />
+        <div className="relative z-10">
+          <Header />
+          <div className="max-w-6xl mx-auto px-4">
+            <div className="flex items-center justify-center py-20">
+              <div className="text-center">
+                <div className="w-16 h-16 border-4 border-black border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                <p className="text-black font-mono">Loading trip...</p>
+              </div>
             </div>
           </div>
         </div>
@@ -342,34 +386,40 @@ export default function TripPage() {
   // Error state
   if (error || !trip) {
     return (
-      <main className="min-h-screen bg-gray-50 py-8 px-4">
-        <div className="max-w-6xl mx-auto">
-          <div className="text-center py-20">
-            <svg
-              className="w-16 h-16 mx-auto mb-4 text-red-500"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">
-              {error || 'Trip not found'}
-            </h1>
-            <p className="text-gray-600 mb-6">
-              The trip you're looking for doesn't exist or has been removed.
-            </p>
-            <a
-              href="/"
-              className="inline-block px-6 py-3 bg-blue-600 text-white rounded-md font-medium hover:bg-blue-700 transition-colors"
-            >
-              Create a New Trip
-            </a>
+      <main className="min-h-screen bg-[#ffb6c1] relative overflow-hidden">
+        <FloatingStickers />
+        <div className="relative z-10">
+          <Header />
+          <div className="max-w-6xl mx-auto px-4">
+            <div className="text-center py-20">
+              <div className="bg-white border-[3px] border-black rounded-2xl p-8 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] inline-block">
+                <svg
+                  className="w-16 h-16 mx-auto mb-4 text-[#ff1493]"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+                <h1 className="text-2xl font-bold text-black mb-2 font-sans">
+                  {error || 'Trip not found'}
+                </h1>
+                <p className="text-black/70 mb-6 font-mono text-sm">
+                  The trip you're looking for doesn't exist or has been removed.
+                </p>
+                <a
+                  href="/"
+                  className="inline-block px-6 py-3 bg-[#ff1493] text-white rounded-lg font-mono font-bold border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+                >
+                  Create a New Trip
+                </a>
+              </div>
+            </div>
           </div>
         </div>
       </main>
@@ -377,85 +427,64 @@ export default function TripPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 py-8 px-4">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="relative text-center mb-8">
-          {/* New Trip Button - Top Left */}
-          <a
-            href="/"
-            className="absolute top-0 left-0 flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md font-medium hover:bg-gray-700 transition-colors shadow-md"
-          >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 4v16m8-8H4"
-              />
-            </svg>
-            New Trip
-          </a>
-          
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">
-            {getTripTitle(trip)}
-          </h1>
-          <p className="text-gray-600">
-            View your trip details and the calculated midpoint
-          </p>
-          <div className="mt-2 text-sm text-gray-500">
-            Trip ID: {trip.id}
+    <main className="min-h-screen bg-[#ffb6c1] relative overflow-hidden">
+      <FloatingStickers />
+      <div className="relative z-10">
+        <Header />
+        <div className="max-w-6xl mx-auto px-4 pb-8">
+          {/* Header */}
+          <div className="mb-8">
+            {/* Buttons Row */}
+            <div className="flex items-center justify-between mb-6">
+              {/* New Trip Button */}
+              <a
+                href="/"
+                className="flex items-center gap-2 px-4 py-2 bg-white text-black rounded-full font-mono font-medium border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+              >
+                <Plus className="w-4 h-4" />
+                New Trip
+              </a>
+              
+              {/* Share Button */}
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(
+                    `${window.location.origin}/trip/${trip.id}`
+                  );
+                  alert('Link copied to clipboard!');
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-[#4361ee] text-white rounded-full font-mono font-medium border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+              >
+                <Share2 className="w-4 h-4" />
+                Share Trip
+              </button>
+            </div>
+            
+            {/* Title */}
+            <h1 className="text-4xl font-bold text-black text-center font-sans">
+              {getTripTitle(trip)}
+            </h1>
           </div>
-          
-          {/* Share Button - Top Right */}
-          <button
-            onClick={() => {
-              navigator.clipboard.writeText(
-                `${window.location.origin}/trip/${trip.id}`
-              );
-              alert('Link copied to clipboard!');
-            }}
-            className="absolute top-0 right-0 flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md font-medium hover:bg-blue-700 transition-colors shadow-md"
-          >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
-              />
-            </svg>
-            Share Trip
-          </button>
-        </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Left Column: Map and Radius Slider */}
           <div className="space-y-6">
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <h2 className="text-xl font-semibold text-gray-800 mb-4">
-                Map View
-              </h2>
+            <div className="bg-white rounded-2xl border-[3px] border-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] p-6">
               {mapPoints.length > 0 && midpoint ? (
                 <MapDisplay
                   startpoints={mapPoints}
                   midpoint={midpoint}
-                  radiusKm={radiusKm}
+                  radiusKm={fetchRadiusKm}
                   restaurants={places}
+                  recommendedPlaceIds={new Set(
+                    Object.values(recommendations)
+                      .filter(rec => rec?.current?.place?.id)
+                      .map(rec => rec!.current!.place.id)
+                  )}
                 />
               ) : (
-                <div className="h-[500px] flex items-center justify-center border border-gray-300 rounded-lg bg-gray-50">
-                  <div className="text-center text-gray-500">
+                <div className="h-[500px] flex items-center justify-center border-[3px] border-black/20 rounded-lg bg-white">
+                  <div className="text-center text-black/60 font-mono">
                     <p>No locations to display</p>
                   </div>
                 </div>
@@ -463,11 +492,11 @@ export default function TripPage() {
 
               {/* Midpoint Info */}
               {midpoint && (
-                <div className="mt-4 p-4 bg-blue-50 rounded-md border border-blue-200">
-                  <div className="text-sm font-medium text-blue-900">
+                <div className="mt-4 p-4 bg-[#7DF9FF]/30 rounded-lg border-[2px] border-[#7DF9FF]">
+                  <div className="text-sm font-bold text-black font-mono">
                     Midpoint Calculated
                   </div>
-                  <div className="text-xs text-blue-700 mt-1">
+                  <div className="text-xs text-black/70 mt-1 font-mono">
                     {midpoint.lat.toFixed(6)}, {midpoint.lon.toFixed(6)}
                   </div>
                 </div>
@@ -475,9 +504,9 @@ export default function TripPage() {
 
               {/* Radius Slider */}
               {midpoint && (
-                <div className="mt-6 pt-4 border-t border-gray-200 space-y-4">
+                <div className="mt-6 pt-4 border-t-[3px] border-black/10 space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-bold text-black mb-2 font-mono">
                       Search radius: {radiusKm} km
                     </label>
                     <input
@@ -487,65 +516,32 @@ export default function TripPage() {
                       step={1}
                       value={radiusKm}
                       onChange={(e) => setRadiusKm(Number(e.target.value))}
-                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                      onMouseUp={(e) => setFetchRadiusKm(Number((e.target as HTMLInputElement).value))}
+                      onTouchEnd={(e) => setFetchRadiusKm(Number((e.target as HTMLInputElement).value))}
+                      className="w-full h-3 bg-black/10 rounded-lg appearance-none cursor-pointer"
+                      style={{
+                        accentColor: '#ff1493',
+                      }}
                     />
-                    <div className="flex justify-between text-xs text-gray-500 mt-1">
+                    <div className="flex justify-between text-xs text-black/50 mt-1 font-mono">
                       <span>1 km</span>
                       <span>100 km</span>
                     </div>
                   </div>
 
-                  {/* Place Type Selection */}
-                  <fieldset>
-                    <legend className="block text-sm font-medium text-gray-700 mb-2">
-                      Show places (multiselect)
-                    </legend>
-                    <div className="flex flex-wrap gap-4">
-                      <label className="inline-flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={placeTypes.includes('restaurant')}
-                          onChange={() => togglePlaceType('restaurant')}
-                          className="rounded border-gray-300 text-orange-600 focus:ring-orange-500"
-                        />
-                        <span className="text-sm text-gray-700">Restaurants</span>
-                        <span className="w-3 h-3 rounded-full bg-[#ea580c]" aria-hidden />
-                      </label>
-                      <label className="inline-flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={placeTypes.includes('bar')}
-                          onChange={() => togglePlaceType('bar')}
-                          className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
-                        />
-                        <span className="text-sm text-gray-700">Bars</span>
-                        <span className="w-3 h-3 rounded-full bg-[#9333ea]" aria-hidden />
-                      </label>
-                      <label className="inline-flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={placeTypes.includes('hotel')}
-                          onChange={() => togglePlaceType('hotel')}
-                          className="rounded border-gray-300 text-green-600 focus:ring-green-500"
-                        />
-                        <span className="text-sm text-gray-700">Hotels</span>
-                        <span className="w-3 h-3 rounded-full bg-[#16a34a]" aria-hidden />
-                      </label>
-                    </div>
-                  </fieldset>
 
                   {/* Places Loading Indicator */}
                   {placesLoading && (
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                    <div className="flex items-center gap-2 text-sm text-black/70 font-mono">
+                      <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
                       <span>Loading places...</span>
                     </div>
                   )}
 
                   {/* Places Count */}
                   {places.length > 0 && !placesLoading && (
-                    <div className="text-sm text-gray-600">
-                      Found {places.length} place{places.length !== 1 ? 's' : ''} within {radiusKm} km
+                    <div className="text-sm text-black/70 font-mono">
+                      Found {places.length} place{places.length !== 1 ? 's' : ''} within {fetchRadiusKm} km
                     </div>
                   )}
                 </div>
@@ -556,22 +552,24 @@ export default function TripPage() {
           {/* Right Column: Recommendation and Mates List */}
           <div className="space-y-6">
             <Recommendation
-              recommendedPlace={recommendation?.place || null}
+              recommendations={recommendations}
+              places={places}
               midpoint={midpoint}
-              reasoning={recommendation?.reasoning}
-              isLoading={enrichmentLoading || isRegenerating}
+              isLoading={enrichmentLoading || isRegenerating !== null}
+              placesLoading={placesLoading}
               hasNoRecommendation={hasNoRecommendation}
               themeIcon={trip?.theme?.icon}
-              onRegenerate={() => {
-                setIsRegenerating(true);
-                setRecommendation(null);
+              selectedPlaceTypes={placeTypes}
+              onRegenerate={(category) => {
+                setIsRegenerating(category);
                 setHasNoRecommendation(false);
-                hasStoredRecommendationRef.current = false;
+                hasStoredRecommendationsRef.current.delete(category);
                 lastEnrichedKeyRef.current = null; // Force regeneration
               }}
             />
             <MatesList users={trip.users} />
           </div>
+        </div>
         </div>
       </div>
     </main>

@@ -34,6 +34,12 @@ export interface TripUser {
 
 import type { Restaurant } from '@/components/MapDisplay';
 
+// Recommendation structure for a single category
+export interface CategoryRecommendation {
+  current: { place: Restaurant; reasoning?: string } | null;
+  previous: { place: Restaurant; reasoning?: string } | null;
+}
+
 // Complete trip data structure
 export interface Trip {
   id: string;
@@ -41,12 +47,13 @@ export interface Trip {
   users: TripUser[];
   themeId?: string;
   theme?: TripTheme;
-  recommendation?: { place: Restaurant; reasoning?: string } | null;
+  recommendation?: Record<string, CategoryRecommendation>; // Flexible for any PlaceType
   places?: Restaurant[];
   placesMetadata?: {
     midpointLat?: number;
     midpointLon?: number;
     radiusKm?: number;
     placeTypes?: string[];
+    themeName?: string;
   };
 }

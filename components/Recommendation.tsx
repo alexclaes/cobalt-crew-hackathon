@@ -1,16 +1,22 @@
 'use client';
 
+import { useState } from 'react';
+import { RefreshCw, ChevronRight, ExternalLink } from 'lucide-react';
 import type { Restaurant } from './MapDisplay';
+import type { CategoryRecommendation } from '@/types/trip';
 import { haversineDistanceKm } from '@/lib/midpoint';
+import type { PlaceType } from '@/lib/theme-place-types';
 
 interface RecommendationProps {
-  recommendedPlace: Restaurant | null;
+  recommendations?: Record<string, CategoryRecommendation>;
+  places?: Restaurant[];
   midpoint: { lat: number; lon: number } | null;
-  reasoning?: string;
   isLoading?: boolean;
+  placesLoading?: boolean;
   hasNoRecommendation?: boolean;
   themeIcon?: string;
-  onRegenerate?: () => void;
+  selectedPlaceTypes?: PlaceType[];
+  onRegenerate?: (category: PlaceType) => void;
 }
 
 function ratingToStars(rating: string | number | undefined): string | null {
@@ -22,178 +28,345 @@ function ratingToStars(rating: string | number | undefined): string | null {
   return '★'.repeat(full) + '☆'.repeat(empty);
 }
 
-export default function Recommendation({ recommendedPlace, midpoint, reasoning, isLoading = false, hasNoRecommendation = false, themeIcon = '🦫', onRegenerate }: RecommendationProps) {
-  // Show loading spinner if loading OR if no recommendation yet and not explicitly told there's no recommendation
-  const showLoading = isLoading || (!recommendedPlace && !hasNoRecommendation);
-  
-  if (!recommendedPlace || !midpoint) {
-    return (
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <h2 className="text-xl font-semibold text-gray-800 mb-4">Recommendation</h2>
-        {showLoading ? (
-          <div className="flex flex-col items-center justify-center gap-2 py-8">
-            <style dangerouslySetInnerHTML={{__html: `
-              @keyframes jump {
-                0%, 100% { transform: translateY(0); }
-                50% { transform: translateY(-20px); }
-              }
-              .jump-emoji-1 {
-                animation: jump 0.6s ease-in-out infinite;
-                animation-delay: 0s;
-              }
-              .jump-emoji-2 {
-                animation: jump 0.6s ease-in-out infinite;
-                animation-delay: 0.2s;
-              }
-              .jump-emoji-3 {
-                animation: jump 0.6s ease-in-out infinite;
-                animation-delay: 0.4s;
-              }
-            `}} />
-            <div className="flex items-center justify-center gap-2">
-              <span className="text-4xl inline-block jump-emoji-1">{themeIcon}</span>
-              <span className="text-4xl inline-block jump-emoji-2">{themeIcon}</span>
-              <span className="text-4xl inline-block jump-emoji-3">{themeIcon}</span>
-            </div>
-            <p className="text-sm text-gray-600 mt-2">Enriching with AI...</p>
+function PlaceDetails({
+  place,
+  midpoint,
+  reasoning,
+}: {
+  place: Restaurant;
+  midpoint: { lat: number; lon: number };
+  reasoning?: string;
+}) {
+  const distanceKm = haversineDistanceKm(midpoint, { lat: place.lat, lon: place.lon });
+  const stars = ratingToStars(place.rating);
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <h3 className="text-lg font-bold text-black font-mono">{place.name}</h3>
+      </div>
+
+      <div className="space-y-2 text-sm">
+        <div className="flex items-start gap-2">
+          <span>📍</span>
+          <div className="font-mono">
+            <span className="font-bold text-black">Distance:</span>{' '}
+            <span className="text-black/70">{distanceKm.toFixed(1)} km from midpoint</span>
           </div>
-        ) : (
-          <div className="text-center py-8 text-gray-500">
-            <p>No recommendation available at this time.</p>
-            <p className="text-sm mt-2">Please try adjusting your search criteria or radius.</p>
+        </div>
+
+        {stars && (
+          <div className="flex items-start gap-2">
+            <span>⭐</span>
+            <div className="font-mono">
+              <span className="font-bold text-black">Rating:</span>{' '}
+              <span className="text-amber-500">{stars}</span>
+              {typeof place.rating === 'number' ||
+              (typeof place.rating === 'string' && !Number.isNaN(parseFloat(place.rating))) ? (
+                <span className="ml-1 text-black/70">({place.rating})</span>
+              ) : null}
+            </div>
+          </div>
+        )}
+
+        {place.priceRange && (
+          <div className="flex items-start gap-2">
+            <span>💰</span>
+            <div className="font-mono">
+              <span className="font-bold text-black">Price Range:</span>{' '}
+              <span className="text-black/70">{place.priceRange}</span>
+            </div>
+          </div>
+        )}
+
+        {place.cuisine && (
+          <div className="flex items-start gap-2">
+            <span>🍽️</span>
+            <div className="font-mono">
+              <span className="font-bold text-black">Cuisine:</span>{' '}
+              <span className="text-black/70">{place.cuisine}</span>
+            </div>
+          </div>
+        )}
+
+        {(place.veganOptions || place.vegetarianOptions) && (
+          <div className="flex items-start gap-2">
+            <span>🌱</span>
+            <div className="font-mono">
+              <span className="font-bold text-black">Dietary Options:</span>{' '}
+              <span className="text-black/70">
+                Vegan: {place.veganOptions || 'unknown'}, Vegetarian:{' '}
+                {place.vegetarianOptions || 'unknown'}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {place.openingHours && (
+          <div className="flex items-start gap-2">
+            <span>🕐</span>
+            <div className="font-mono">
+              <span className="font-bold text-black">Opening Hours:</span>{' '}
+              <span className="text-black/70">{place.openingHours}</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {reasoning && (
+        <div className="mt-4 p-3 bg-[#E0B0FF]/30 rounded-lg border-[2px] border-[#E0B0FF]">
+          <p className="text-sm text-black font-mono">{reasoning}</p>
+        </div>
+      )}
+
+      <div className="mt-4 pt-3 border-t-[2px] border-black/10">
+        <a
+          href={`https://www.google.com/maps?q=${place.lat},${place.lon}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-sm text-[#ff1493] hover:text-[#ff1493]/80 hover:underline inline-flex items-center gap-1 font-mono font-medium"
+        >
+          <ExternalLink className="w-3 h-3" />
+          View on Google Maps
+        </a>
+      </div>
+    </div>
+  );
+}
+
+export default function Recommendation({
+  recommendations,
+  places = [],
+  midpoint,
+  isLoading = false,
+  placesLoading = false,
+  hasNoRecommendation = false,
+  themeIcon = '🦫',
+  selectedPlaceTypes = ['restaurant', 'bar', 'hotel'],
+  onRegenerate,
+}: RecommendationProps) {
+  const [activeTab, setActiveTab] = useState<PlaceType>('restaurant');
+  const [isOtherOptionsExpanded, setIsOtherOptionsExpanded] = useState(false);
+
+  const categoryLabels: Partial<Record<PlaceType, string>> = {
+    restaurant: 'Restaurants',
+    bar: 'Bars',
+    hotel: 'Hotels',
+    camping: 'Camping',
+    hostel: 'Hostels',
+    shop: 'Shops',
+    museum: 'Museums',
+    theatre: 'Theatres',
+    spa: 'Spas',
+    'natural formations': 'Natural Formations',
+    'brewery map': 'Breweries',
+    historic: 'Historic Sites',
+    elevation: 'Elevation Points',
+    'dog map': 'Dog Parks',
+  };
+
+  // Determine which tabs to show
+  const availableCategories: PlaceType[] = [];
+  for (const type of selectedPlaceTypes) {
+    const hasRecommendation = recommendations?.[type]?.current !== null;
+    const isSelected = selectedPlaceTypes.includes(type);
+    if (hasRecommendation || isSelected) {
+      availableCategories.push(type);
+    }
+  }
+
+  // Set initial active tab to first available category
+  if (availableCategories.length > 0 && !availableCategories.includes(activeTab)) {
+    setActiveTab(availableCategories[0]);
+  }
+
+  const currentRecommendation = recommendations?.[activeTab]?.current;
+  const showLoading = isLoading || placesLoading;
+
+  if (!midpoint) {
+    return null;
+  }
+
+  const tabColors = [
+    "bg-[#ff69b4]/30 border-[#ff69b4]",
+    "bg-[#7DF9FF]/30 border-[#7DF9FF]",
+    "bg-[#E0B0FF]/30 border-[#E0B0FF]",
+    "bg-[#c8ff00]/30 border-[#c8ff00]",
+    "bg-[#ffe135]/30 border-[#ffe135]",
+  ];
+
+  return (
+    <div className="bg-white rounded-2xl border-[3px] border-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-bold text-black font-sans">Recommendation</h2>
+        {onRegenerate && currentRecommendation && (
+          <button
+            onClick={() => onRegenerate(activeTab)}
+            className="p-2 text-black hover:bg-[#ff1493]/20 rounded-lg transition-colors border-2 border-transparent hover:border-black"
+            title="Regenerate recommendation"
+          >
+            <RefreshCw className="w-5 h-5" />
+          </button>
+        )}
+      </div>
+
+      {/* Tabs */}
+      {availableCategories.length > 1 && (
+        <div className="flex flex-wrap gap-2 mb-4">
+          {availableCategories.map((category, index) => (
+            <button
+              key={category}
+              onClick={() => setActiveTab(category)}
+              className={`px-4 py-2 text-sm font-bold font-mono rounded-full border-[3px] transition-all ${
+                activeTab === category
+                  ? `${tabColors[index % tabColors.length]} border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]`
+                  : 'bg-white text-black/50 border-black/20 hover:border-black/40'
+              }`}
+            >
+              {categoryLabels[category]}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Content */}
+      {showLoading ? (
+        <div className="flex flex-col items-center justify-center gap-2 py-8">
+          <style
+            dangerouslySetInnerHTML={{
+              __html: `
+            @keyframes jump {
+              0%, 100% { transform: translateY(0); }
+              50% { transform: translateY(-20px); }
+            }
+            .jump-emoji-1 {
+              animation: jump 0.6s ease-in-out infinite;
+              animation-delay: 0s;
+            }
+            .jump-emoji-2 {
+              animation: jump 0.6s ease-in-out infinite;
+              animation-delay: 0.2s;
+            }
+            .jump-emoji-3 {
+              animation: jump 0.6s ease-in-out infinite;
+              animation-delay: 0.4s;
+            }
+          `,
+            }}
+          />
+          <div className="flex items-center justify-center gap-2">
+            <span className="text-4xl inline-block jump-emoji-1">{themeIcon}</span>
+            <span className="text-4xl inline-block jump-emoji-2">{themeIcon}</span>
+            <span className="text-4xl inline-block jump-emoji-3">{themeIcon}</span>
+          </div>
+          <p className="text-sm text-black/70 mt-2 font-mono">Enriching with AI...</p>
+        </div>
+      ) : !showLoading && currentRecommendation ? (
+        <div>
+          <PlaceDetails
+            place={currentRecommendation.place}
+            midpoint={midpoint}
+            reasoning={currentRecommendation.reasoning}
+          />
+
+          {/* Other Options Overview */}
+          {(() => {
+            const otherPlaces = places
+              .filter((p) => p.type === activeTab && p.id !== currentRecommendation.place.id)
+              .slice(0, 4);
+
+            if (otherPlaces.length > 0) {
+              return (
+                <div className="mt-6 pt-6 border-t-[3px] border-black/10">
+                  <button
+                    onClick={() => setIsOtherOptionsExpanded(!isOtherOptionsExpanded)}
+                    className="w-full flex items-center justify-between mb-3 hover:opacity-80 transition-opacity"
+                  >
+                    <h4 className="text-sm font-bold text-black font-mono">Other Options</h4>
+                    <ChevronRight
+                      className={`w-4 h-4 text-black transition-transform duration-200 ${
+                        isOtherOptionsExpanded ? 'rotate-90' : ''
+                      }`}
+                    />
+                  </button>
+                  {isOtherOptionsExpanded && (
+                    <div className="space-y-2">
+                      {otherPlaces.map((place) => {
+                        const distanceKm = haversineDistanceKm(midpoint, {
+                          lat: place.lat,
+                          lon: place.lon,
+                        });
+                        const stars = ratingToStars(place.rating);
+                        return (
+                          <div
+                            key={place.id}
+                            className="p-3 bg-[#f5f5f5] rounded-lg border-[2px] border-black/20"
+                          >
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <h5 className="text-sm font-bold text-black font-mono">
+                                  {place.name}
+                                </h5>
+                                <div className="mt-1 space-y-0.5 text-xs text-black/70 font-mono">
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[10px]">📍</span>
+                                    <span>{distanceKm.toFixed(1)} km</span>
+                                  </div>
+                                  {stars && (
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-[10px]">⭐</span>
+                                      <span className="text-amber-500">{stars}</span>
+                                    </div>
+                                  )}
+                                  {place.priceRange && (
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-[10px]">💰</span>
+                                      <span>{place.priceRange}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              <a
+                                href={`https://www.google.com/maps?q=${place.lat},${place.lon}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="ml-2 text-[11px] text-[#ff1493] hover:text-[#ff1493]/80 hover:underline font-mono font-medium"
+                              >
+                                View
+                              </a>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+            return null;
+          })()}
+        </div>
+      ) : (
+        <div className="text-center py-8">
+          <div className="bg-[#ffe135]/30 border-[2px] border-[#ffe135] rounded-lg p-6">
+            <p className="text-black/70 font-mono text-sm mb-2">
+              No recommendation available for {categoryLabels[activeTab]?.toLowerCase() || activeTab}{' '}
+              at this time.
+            </p>
+            <p className="text-xs text-black/50 font-mono mb-4">
+              Please try adjusting your search criteria or radius.
+            </p>
             {onRegenerate && (
               <button
-                onClick={onRegenerate}
-                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                onClick={() => onRegenerate(activeTab)}
+                className="px-4 py-2 bg-[#ff1493] text-white rounded-lg font-mono font-bold border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
               >
                 Regenerate Recommendation
               </button>
             )}
           </div>
-        )}
-      </div>
-    );
-  }
-
-  const distanceKm = haversineDistanceKm(midpoint, { lat: recommendedPlace.lat, lon: recommendedPlace.lon });
-  const stars = ratingToStars(recommendedPlace.rating);
-
-  return (
-    <div className="bg-white rounded-lg shadow-md p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-semibold text-gray-800">Recommendation</h2>
-        {onRegenerate && (
-          <button
-            onClick={onRegenerate}
-            className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
-            title="Regenerate recommendation"
-          >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-              />
-            </svg>
-          </button>
-        )}
-      </div>
-      
-      <div className="space-y-3">
-        <div>
-          <h3 className="text-lg font-bold text-gray-900">{recommendedPlace.name}</h3>
         </div>
-
-        <div className="space-y-2 text-sm">
-          <div className="flex items-start gap-2">
-            <span className="text-gray-600">📍</span>
-            <div>
-              <span className="font-medium text-gray-700">Distance:</span>{' '}
-              <span className="text-gray-600">{distanceKm.toFixed(1)} km from midpoint</span>
-            </div>
-          </div>
-
-          {stars && (
-            <div className="flex items-start gap-2">
-              <span className="text-gray-600">⭐</span>
-              <div>
-                <span className="font-medium text-gray-700">Rating:</span>{' '}
-                <span className="text-amber-500">{stars}</span>
-                {typeof recommendedPlace.rating === 'number' || 
-                 (typeof recommendedPlace.rating === 'string' && !Number.isNaN(parseFloat(recommendedPlace.rating))) ? (
-                  <span className="ml-1 text-gray-600">({recommendedPlace.rating})</span>
-                ) : null}
-              </div>
-            </div>
-          )}
-
-          {recommendedPlace.priceRange && (
-            <div className="flex items-start gap-2">
-              <span className="text-gray-600">💰</span>
-              <div>
-                <span className="font-medium text-gray-700">Price Range:</span>{' '}
-                <span className="text-gray-600">{recommendedPlace.priceRange}</span>
-              </div>
-            </div>
-          )}
-
-          {recommendedPlace.cuisine && (
-            <div className="flex items-start gap-2">
-              <span className="text-gray-600">🍽️</span>
-              <div>
-                <span className="font-medium text-gray-700">Cuisine:</span>{' '}
-                <span className="text-gray-600">{recommendedPlace.cuisine}</span>
-              </div>
-            </div>
-          )}
-
-          {(recommendedPlace.veganOptions || recommendedPlace.vegetarianOptions) && (
-            <div className="flex items-start gap-2">
-              <span className="text-gray-600">🌱</span>
-              <div>
-                <span className="font-medium text-gray-700">Dietary Options:</span>{' '}
-                <span className="text-gray-600">
-                  Vegan: {recommendedPlace.veganOptions || 'unknown'}, 
-                  Vegetarian: {recommendedPlace.vegetarianOptions || 'unknown'}
-                </span>
-              </div>
-            </div>
-          )}
-
-          {recommendedPlace.openingHours && (
-            <div className="flex items-start gap-2">
-              <span className="text-gray-600">🕐</span>
-              <div>
-                <span className="font-medium text-gray-700">Opening Hours:</span>{' '}
-                <span className="text-gray-600">{recommendedPlace.openingHours}</span>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {reasoning && (
-          <div className="mt-4 p-3 bg-blue-50 rounded-md border border-blue-200">
-            <p className="text-sm text-blue-900">{reasoning}</p>
-          </div>
-        )}
-
-        <div className="mt-4 pt-3 border-t border-gray-200">
-          <a
-            href={`https://www.google.com/maps?q=${recommendedPlace.lat},${recommendedPlace.lon}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1"
-          >
-            View on Google Maps
-          </a>
-        </div>
-      </div>
+      )}
     </div>
   );
 }

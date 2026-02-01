@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS trips (
   created_at TIMESTAMP DEFAULT NOW(),
   users JSONB NOT NULL,
   theme_id UUID REFERENCES trip_themes(id),
-  recommendation JSONB,
+  recommendation JSONB, -- Structure: { [PlaceType]: { "current": { "place": {...}, "reasoning": "..." } | null, "previous": { "place": {...}, "reasoning": "..." } | null } } - PlaceType can be any of: restaurant, bar, hotel, camping, hostel, shop, museum, theatre, spa, natural formations, brewery map, historic, elevation, dog map
   places JSONB,
   places_metadata JSONB -- stores midpoint, radius, placeTypes for cache invalidation
 );
