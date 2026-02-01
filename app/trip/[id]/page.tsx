@@ -332,7 +332,7 @@ export default function TripPage() {
     setPlacesLoading(true);
 
     const typesParam = placeTypes.join(',');
-    fetch(`/api/restaurants?lat=${midpoint.lat}&lon=${midpoint.lon}&radiusKm=${fetchRadiusKm}&types=${typesParam}`)
+    fetch(`/api/places?lat=${midpoint.lat}&lon=${midpoint.lon}&radiusKm=${fetchRadiusKm}&types=${typesParam}`)
       .then((r) => r.json())
       .then((places: Restaurant[]) => {
         if (cancelled) return;
@@ -382,7 +382,7 @@ export default function TripPage() {
     return () => {
       cancelled = true;
     };
-  }, [midpoint?.lat, midpoint?.lon, fetchRadiusKm, placeTypes.slice().sort().join(','), trip, tripId, places.length, placesLoading, isRegenerating, isLoading]);
+  }, [midpoint?.lat, midpoint?.lon, fetchRadiusKm, placeTypes.slice().sort().join(','), trip?.id, tripId]);
 
   // Automatic enrichment: when places load (from Overpass), call OpenAI to add cost, rating, vegan/veg, etc.
   useEffect(() => {
@@ -592,7 +592,7 @@ export default function TripPage() {
     return () => {
       cancelled = true;
     };
-  }, [midpoint?.lat, midpoint?.lon, places.length, placesLoading, isRegenerating, tripId, placeTypes.slice().sort().join(',')]);
+  }, [midpoint?.lat, midpoint?.lon, placesLoading, isRegenerating, tripId, placeTypes.slice().sort().join(',')]);
 
   // Loading state
   if (isLoading) {
