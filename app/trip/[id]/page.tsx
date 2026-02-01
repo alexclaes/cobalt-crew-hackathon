@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { useParams } from 'next/navigation';
 import { Plus, Share2 } from 'lucide-react';
+import { Header } from '@/components/Header';
 import { FloatingStickers } from '@/components/FloatingStickers';
 import MatesList from '@/components/MatesList';
 import Recommendation from '@/components/Recommendation';
@@ -65,7 +66,7 @@ export default function TripPage() {
         setError(null);
 
         const response = await fetch(`/api/trips/${tripId}`);
-        
+
         if (!response.ok) {
           if (response.status === 404) {
             setError('Trip not found');
@@ -193,7 +194,7 @@ export default function TripPage() {
               haversineDistanceKm(midpoint, { lat: b.lat, lon: b.lon })
           );
           setPlaces(places);
-          
+
           // Save places to database
           if (tripId && places.length > 0) {
             fetch(`/api/trips/${tripId}/places`, {
@@ -216,7 +217,7 @@ export default function TripPage() {
         } else {
           setPlaces([]);
         }
-        
+
         // Recommendations are handled separately in the enrichment effect
       })
       .catch((err) => {
@@ -237,7 +238,7 @@ export default function TripPage() {
     if (!midpoint || places.length === 0 || placesLoading) return;
 
     // Skip AI enrichment for categories that have stored recommendations (unless regenerating that category)
-    const needsEnrichment = placeTypes.some(type => 
+    const needsEnrichment = placeTypes.some(type =>
       !hasStoredRecommendationsRef.current.has(type) || isRegenerating === type
     );
     if (!needsEnrichment && !isRegenerating) {
@@ -281,12 +282,12 @@ export default function TripPage() {
               });
             }
           }
-          
+
           // Process recommendations per category
           if (response.recommendations) {
             setRecommendations((prev) => {
               const updated = { ...prev };
-              
+
               // Process recommendations for all place types in the theme
               for (const category of placeTypes) {
                 const categoryRec = response.recommendations?.[category];
@@ -298,26 +299,26 @@ export default function TripPage() {
                       place: recommendedPlace,
                       reasoning: categoryRec.reasoning,
                     };
-                    
+
                     // Store new recommendation (no history)
                     const newCategoryRec = {
                       current: fullRecommendation,
                       previous: null, // History removed - always null
                     };
                     updated[category] = newCategoryRec;
-                    
+
                     // Save to database
                     if (tripId) {
                       fetch(`/api/trips/${tripId}/recommendation`, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ 
+                        body: JSON.stringify({
                           recommendation: fullRecommendation,
-                          category 
+                          category
                         }),
                       }).catch(err => console.error(`Error saving ${category} recommendation:`, err));
                     }
-                    
+
                     hasStoredRecommendationsRef.current.add(category);
                   }
                 } else if (categoryRec && categoryRec.placeId === null && placeTypes.includes(category)) {
@@ -327,14 +328,14 @@ export default function TripPage() {
                   }
                 }
               }
-              
+
               return updated;
             });
             setHasNoRecommendation(false);
           } else {
             setHasNoRecommendation(true);
           }
-          
+
           lastEnrichedKeyRef.current = batchKey;
           setIsRegenerating(null);
         }
@@ -358,13 +359,16 @@ export default function TripPage() {
   // Loading state
   if (isLoading) {
     return (
-      <main className="min-h-screen bg-[#ffb6c1] py-8 px-4 relative overflow-hidden">
+      <main className="min-h-screen bg-[#ffb6c1] relative overflow-hidden">
         <FloatingStickers />
-        <div className="max-w-6xl mx-auto relative z-10">
-          <div className="flex items-center justify-center py-20">
-            <div className="text-center">
-              <div className="w-16 h-16 border-4 border-black border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-              <p className="text-black font-mono">Loading trip...</p>
+        <div className="relative z-10">
+          <Header />
+          <div className="max-w-6xl mx-auto px-4">
+            <div className="flex items-center justify-center py-20">
+              <div className="text-center">
+                <div className="w-16 h-16 border-4 border-black border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                <p className="text-black font-mono">Loading trip...</p>
+              </div>
             </div>
           </div>
         </div>
@@ -375,36 +379,39 @@ export default function TripPage() {
   // Error state
   if (error || !trip) {
     return (
-      <main className="min-h-screen bg-[#ffb6c1] py-8 px-4 relative overflow-hidden">
+      <main className="min-h-screen bg-[#ffb6c1] relative overflow-hidden">
         <FloatingStickers />
-        <div className="max-w-6xl mx-auto relative z-10">
-          <div className="text-center py-20">
-            <div className="bg-white border-[3px] border-black rounded-2xl p-8 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] inline-block">
-              <svg
-                className="w-16 h-16 mx-auto mb-4 text-[#ff1493]"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-              <h1 className="text-2xl font-bold text-black mb-2 font-sans">
-                {error || 'Trip not found'}
-              </h1>
-              <p className="text-black/70 mb-6 font-mono text-sm">
-                The trip you're looking for doesn't exist or has been removed.
-              </p>
-              <a
-                href="/"
-                className="inline-block px-6 py-3 bg-[#ff1493] text-white rounded-lg font-mono font-bold border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
-              >
-                Create a New Trip
-              </a>
+        <div className="relative z-10">
+          <Header />
+          <div className="max-w-6xl mx-auto px-4">
+            <div className="text-center py-20">
+              <div className="bg-white border-[3px] border-black rounded-2xl p-8 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] inline-block">
+                <svg
+                  className="w-16 h-16 mx-auto mb-4 text-[#ff1493]"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+                <h1 className="text-2xl font-bold text-black mb-2 font-sans">
+                  {error || 'Trip not found'}
+                </h1>
+                <p className="text-black/70 mb-6 font-mono text-sm">
+                  The trip you're looking for doesn't exist or has been removed.
+                </p>
+                <a
+                  href="/"
+                  className="inline-block px-6 py-3 bg-[#ff1493] text-white rounded-lg font-mono font-bold border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+                >
+                  Create a New Trip
+                </a>
+              </div>
             </div>
           </div>
         </div>
@@ -413,52 +420,49 @@ export default function TripPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#ffb6c1] py-8 px-4 relative overflow-hidden">
+    <main className="min-h-screen bg-[#ffb6c1] relative overflow-hidden">
       <FloatingStickers />
-      <div className="max-w-6xl mx-auto relative z-10">
-        {/* Header */}
-        <div className="relative text-center mb-8">
-          {/* New Trip Button - Top Left */}
-          <a
-            href="/"
-            className="absolute top-0 left-0 flex items-center gap-2 px-4 py-2 bg-white text-black rounded-full font-mono font-medium border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            New Trip
-          </a>
-          
-          <h1 className="text-4xl font-bold text-black mb-2 font-sans">
-            {getTripTitle(trip)}
-          </h1>
-          <p className="text-black/70 font-mono text-sm">
-            View your trip details and the calculated midpoint
-          </p>
-          <div className="mt-2 text-xs text-black/50 font-mono">
-            Trip ID: {trip.id}
+      <div className="relative z-10">
+        <Header />
+        <div className="max-w-6xl mx-auto px-4 pb-8">
+          {/* Header */}
+          <div className="mb-8">
+            {/* Buttons Row */}
+            <div className="flex items-center justify-between mb-6">
+              {/* New Trip Button */}
+              <a
+                href="/"
+                className="flex items-center gap-2 px-4 py-2 bg-white text-black rounded-full font-mono font-medium border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+              >
+                <Plus className="w-4 h-4" />
+                New Trip
+              </a>
+              
+              {/* Share Button */}
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(
+                    `${window.location.origin}/trip/${trip.id}`
+                  );
+                  alert('Link copied to clipboard!');
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-[#4361ee] text-white rounded-full font-mono font-medium border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+              >
+                <Share2 className="w-4 h-4" />
+                Share Trip
+              </button>
+            </div>
+            
+            {/* Title */}
+            <h1 className="text-4xl font-bold text-black text-center font-sans">
+              {getTripTitle(trip)}
+            </h1>
           </div>
-          
-          {/* Share Button - Top Right */}
-          <button
-            onClick={() => {
-              navigator.clipboard.writeText(
-                `${window.location.origin}/trip/${trip.id}`
-              );
-              alert('Link copied to clipboard!');
-            }}
-            className="absolute top-0 right-0 flex items-center gap-2 px-4 py-2 bg-[#4361ee] text-white rounded-full font-mono font-medium border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
-          >
-            <Share2 className="w-4 h-4" />
-            Share Trip
-          </button>
-        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Left Column: Map and Radius Slider */}
           <div className="space-y-6">
             <div className="bg-white rounded-2xl border-[3px] border-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] p-6">
-              <h2 className="text-xl font-bold text-black mb-4 font-sans">
-                Map View
-              </h2>
               {mapPoints.length > 0 && midpoint ? (
                 <MapDisplay
                   startpoints={mapPoints}
@@ -558,6 +562,7 @@ export default function TripPage() {
             />
             <MatesList users={trip.users} />
           </div>
+        </div>
         </div>
       </div>
     </main>
