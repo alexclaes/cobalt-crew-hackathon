@@ -5,7 +5,7 @@ import { Header } from '@/components/Header';
 import { FloatingStickers } from '@/components/FloatingStickers';
 import { VoiceSection } from '@/components/VoiceSection';
 import { MatesSection } from '@/components/MatesSection';
-import { TripThemeSection } from '@/components/TripThemeSection';
+import { TripThemeSection, TripActionButton } from '@/components/TripThemeSection';
 import UserSelectionModal from '@/components/UserSelectionModal';
 import AddManualMateModal from '@/components/AddManualMateModal';
 import { type VoiceResult } from '@/components/VoiceInput';
@@ -89,14 +89,7 @@ export default function Home() {
           triggerRecording={triggerRecording}
         />
 
-        <div className="max-w-2xl mx-auto px-4 sm:px-4 md:px-6 pb-32 sm:pb-48 md:pb-[400px] overflow-visible">
-          <MatesSection
-            users={users}
-            onRemoveUser={removeUser}
-            onSelectFromList={() => setIsModalOpen(true)}
-            onAddManualMate={() => setIsManualMateModalOpen(true)}
-          />
-
+        <div className="max-w-2xl mx-auto px-4 sm:px-4 md:px-6 pb-32 sm:pb-48 md:pb-[400px] overflow-visible space-y-6">
           <TripThemeSection
             themes={themes}
             selectedThemeId={selectedThemeId}
@@ -106,8 +99,24 @@ export default function Home() {
             isCreating={isCreating}
             validationMessage={getValidationMessage()}
           />
+
+          <MatesSection
+            users={users}
+            onRemoveUser={removeUser}
+            onSelectFromList={() => setIsModalOpen(true)}
+            onAddManualMate={() => setIsManualMateModalOpen(true)}
+          />
         </div>
       </div>
+
+      {/* Action Button/Validation at Bottom */}
+      <TripActionButton
+        canCreateTrip={canCalculate}
+        selectedThemeId={selectedThemeId}
+        onCreateTrip={handleCreateTrip}
+        isCreating={isCreating}
+        validationMessage={getValidationMessage()}
+      />
 
       {/* Keep existing modals */}
       <UserSelectionModal
