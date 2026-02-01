@@ -1,5 +1,7 @@
 "use client";
 
+import { MapPin, Train } from "lucide-react";
+
 export function FloatingStickers() {
   return (
     <>
@@ -14,9 +16,14 @@ export function FloatingStickers() {
         </div>
       </div>
 
-      {/* Mint circle - top left - Keep on mobile, smaller size */}
+      {/* Location marker - top left - Keep on mobile, smaller size */}
       <div className="absolute top-12 left-2 sm:top-20 sm:left-4 md:top-32 md:left-8 z-0 pointer-events-none -rotate-6">
-        <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-[#7DF9FF] rounded-full border-[2px] sm:border-[3px] border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]" />
+        <MapPin 
+          className="w-6 h-6 sm:w-8 sm:h-8 md:w-10 md:h-10" 
+          fill="#4361ee" 
+          stroke="black" 
+          strokeWidth={2.5}
+        />
       </div>
 
       {/* Yellow zigzag/lightning - Repositioned to bottom left area, under text on desktop, below buttons on mobile */}
@@ -38,9 +45,14 @@ export function FloatingStickers() {
         </svg>
       </div>
 
-      {/* Hot pink circle - right middle - Keep on mobile, smaller size */}
-      <div className="absolute top-1/2 right-2 sm:right-4 md:right-6 z-0 pointer-events-none rotate-6">
-        <div className="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 bg-[#ff1493] rounded-full border-[2px] sm:border-[3px] border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]" />
+      {/* Hot pink marker - right middle - Keep on mobile, bigger size */}
+      <div className="absolute top-1/2 right-8 sm:right-12 md:right-16 z-0 pointer-events-none rotate-6">
+        <MapPin 
+          className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12" 
+          fill="#ff1493" 
+          stroke="black" 
+          strokeWidth={2.5}
+        />
       </div>
 
       {/* Dotted circle decoration - bottom left - Hide on mobile */}
@@ -94,6 +106,17 @@ export function FloatingStickers() {
           <path d="M20 10 L12 9 L10 10 L12 11 Z" fill="black" />
         </svg>
       </div>
+
+      {/* Train sticker - top center area */}
+      <div className="absolute top-52 left-2/3 sm:top-20 sm:left-2/5 md:top-44 md:left-2/3 md:-translate-x-1/2 z-0 pointer-events-none rotate-[5deg]">
+        <Train 
+          className="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10" 
+          fill="#7DF9FF"
+          stroke="black" 
+          strokeWidth={2.5}
+        />
+      </div>
+
     </>
   );
 }
