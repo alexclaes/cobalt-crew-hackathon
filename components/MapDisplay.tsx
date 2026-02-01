@@ -197,8 +197,8 @@ const DEFAULT_RADIUS_KM = 50;
 
 // Line colors for center (geographic), car, train
 const LINE_COLORS = {
-  geographic: '#2563eb',
-  car: '#16a34a',
+  geographic: '#0047AB', // cobalt blue
+  car: '#39ff14',       // very neon green
   train: '#7c3aed',
 } as const;
 
