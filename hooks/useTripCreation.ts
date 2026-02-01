@@ -19,8 +19,7 @@ export function useTripCreation() {
 
   const createTrip = async (
     users: UserEntry[], 
-    selectedThemeId: string | null,
-    transportMode: TransportMode = 'geographic'
+    selectedThemeId: string | null
   ) => {
     const validUsers = users.filter((user) =>
       UserEntrySchema.safeParse(user).success
@@ -59,7 +58,6 @@ export function useTripCreation() {
         preConfiguredUserIds,
         manualUsers,
         themeId: selectedThemeId,
-        transportMode,
       };
 
       const response = await fetch('/api/trips', {
@@ -75,7 +73,7 @@ export function useTripCreation() {
       }
 
       const data: CreateTripResponse = await response.json();
-      router.push(`/trip/${data.tripId}?transportMode=${encodeURIComponent(transportMode)}`);
+      router.push(`/trip/${data.tripId}`);
     } catch (error) {
       console.error('Error creating trip:', error);
       const errorMsg = 'Failed to create trip. Please try again.';

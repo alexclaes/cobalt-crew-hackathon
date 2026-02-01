@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import dynamic from 'next/dynamic';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { Plus, Share2 } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { FloatingStickers } from '@/components/FloatingStickers';
@@ -83,7 +83,6 @@ const MapDisplay = dynamic(() => import('@/components/MapDisplay'), {
 
 export default function TripPage() {
   const params = useParams();
-  const searchParams = useSearchParams();
   const tripId = params.id as string;
 
   const [trip, setTrip] = useState<Trip | null>(null);
@@ -94,6 +93,7 @@ export default function TripPage() {
   const [places, setPlaces] = useState<Restaurant[]>([]);
   const [placesLoading, setPlacesLoading] = useState(false);
   const [enrichmentLoading, setEnrichmentLoading] = useState(false);
+  const [transportMode, setTransportMode] = useState<'geographic' | 'car' | 'train'>('geographic');
   // Calculate place types based on trip theme
   const placeTypes = useMemo(() => {
     if (!trip?.theme?.name) return ['restaurant', 'bar', 'hotel'] as PlaceType[];
@@ -279,12 +279,10 @@ export default function TripPage() {
   }, [tripId]);
 
   // Calculate midpoint from trip users
-  // Use trip.transportMode from API, or fallback to URL param so the chosen mode shows
-  const urlTransportMode = searchParams.get('transportMode');
-  
+  // Use local transport mode state
   const effectiveTransportMode = useMemo(() => {
-    return trip?.transportMode ?? (urlTransportMode === 'car' ? 'car' : 'geographic');
-  }, [trip?.transportMode, urlTransportMode]);
+    return trip?.transportMode ?? transportMode;
+  }, [trip?.transportMode, transportMode]);
   
   const wantCarMeetingPoint = useMemo(() => {
     return effectiveTransportMode === 'car';
@@ -891,6 +889,44 @@ export default function TripPage() {
                   </div>
                 </div>
               )}
+
+              {/* Transport Mode Selection - below map, no border */}
+              <div className="mt-6">
+                <h3 className="text-lg font-bold text-black font-sans mb-3">Meeting Point Calculation</h3>
+                <div className="flex gap-3 flex-wrap">
+                  <label className="inline-flex items-center gap-2 cursor-pointer px-4 py-2 rounded-lg border-2 border-gray-300 hover:border-blue-500 transition-colors bg-white">
+                    <input
+                      type="radio"
+                      name="transport"
+                      checked={transportMode === 'geographic'}
+                      onChange={() => setTransportMode('geographic')}
+                      className="text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="font-mono text-sm">📍 Geographic Center</span>
+                  </label>
+                  <label className="inline-flex items-center gap-2 cursor-pointer px-4 py-2 rounded-lg border-2 border-gray-300 hover:border-blue-500 transition-colors bg-white">
+                    <input
+                      type="radio"
+                      name="transport"
+                      checked={transportMode === 'car'}
+                      onChange={() => setTransportMode('car')}
+                      className="text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="font-mono text-sm">🚗 By Car (travel time)</span>
+                  </label>
+                  <label className="inline-flex items-center gap-2 cursor-not-allowed px-4 py-2 rounded-lg border-2 border-gray-200 opacity-50 bg-gray-50">
+                    <input
+                      type="radio"
+                      name="transport"
+                      checked={transportMode === 'train'}
+                      disabled
+                      readOnly
+                      className="text-gray-400 focus:ring-0 cursor-not-allowed"
+                    />
+                    <span className="font-mono text-sm text-gray-500">🚆 By Train (coming soon)</span>
+                  </label>
+                </div>
+              </div>
 
               {/* Midpoint Info */}
               {midpoint && (
