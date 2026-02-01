@@ -42,6 +42,8 @@ IMPORTANT: Some places may have minimal data (only name and location). For these
 
 Additionally, analyze enriched places separately by their type and recommend the best location for EACH category. When places have rich data (rating, price, etc.), consider all factors: rating quality, distance to midpoint, price value, cuisine/appeal, dietary options (for restaurants/bars), and opening hours. However, when places have minimal data (only name and location), ALWAYS recommend the place closest to the midpoint and create a creative, engaging recommendation sentence that highlights the location's proximity and potential appeal.
 
+CRITICAL FOR RECOMMENDATIONS: In the "reasoning" field, ONLY mention cuisine, price range, dietary options, or opening hours if that information is known (not "unknown"). If any of these fields are "unknown" or missing, do NOT mention them in the reasoning text at all. Focus on the aspects you know: distance, rating (if known), general appeal, and location benefits.
+
 Return a JSON object with two keys:
 1. "places": an array of objects; each object must include "id" (same as input) plus the enriched fields above.
 2. "recommendations": an object with keys matching the place types in the input (e.g., "restaurant", "bar", "hotel", "camping", "hostel", "shop", "museum", "theatre", "spa", "natural formations", "brewery map", "historic", "elevation", "dog map"). Each key contains an object with "placeId" (the id of the recommended place of that type, or null if no suitable place) and "reasoning" (a brief 1-2 sentence creative explanation - REQUIRED, even for places with minimal data). Only include recommendations for categories that have places in the input and are in the placeTypes array.`;
@@ -60,6 +62,8 @@ After enriching all places, analyze them separately by type. For each category t
 CRITICAL: If places have minimal data (only name and location), you MUST still recommend the place closest to the midpoint. Create a creative, engaging recommendation sentence that emphasizes proximity and the location's appeal (e.g., "Perfectly positioned at the heart of your meeting point, this location offers convenient access for everyone" or "Located just steps from your midpoint, this spot is ideal for your group gathering").
 
 For places with rich data, consider: rating quality, distance to midpoint (closer is better), price value (balance of cost and quality), cuisine/appeal (for restaurants/bars), dietary accommodation (for restaurants/bars), opening hours availability, and category-specific factors (e.g., natural beauty for natural formations, elevation for peaks, accessibility for family-friendly places). 
+
+IMPORTANT: In the "reasoning" text, ONLY mention cuisine, price range, dietary options (vegan/vegetarian), or opening hours if that information is known and not "unknown". If any of these fields are "unknown" or missing, completely omit them from the reasoning. Do not write phrases like "cuisine unknown" or "price range unknown" - simply don't mention those aspects at all. Focus on what you know: distance, rating (if available), location benefits, and general appeal.
 
 ALWAYS provide a "reasoning" field for each recommendation - be creative and engaging, especially when data is sparse. Only generate recommendations for categories that are in the placeTypes array and have places of that type in the input.`;
 }

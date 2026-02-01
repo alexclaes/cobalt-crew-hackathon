@@ -69,7 +69,7 @@ function PlaceDetails({
           </div>
         )}
 
-        {place.priceRange && (
+        {place.priceRange && place.priceRange.toLowerCase() !== 'unknown' && (
           <div className="flex items-start gap-2">
             <span>💰</span>
             <div className="font-mono">
@@ -79,7 +79,7 @@ function PlaceDetails({
           </div>
         )}
 
-        {place.cuisine && (
+        {place.cuisine && place.cuisine.toLowerCase() !== 'unknown' && (
           <div className="flex items-start gap-2">
             <span>🍽️</span>
             <div className="font-mono">
@@ -89,20 +89,27 @@ function PlaceDetails({
           </div>
         )}
 
-        {(place.veganOptions || place.vegetarianOptions) && (
-          <div className="flex items-start gap-2">
-            <span>🌱</span>
-            <div className="font-mono">
-              <span className="font-bold text-black">Dietary Options:</span>{' '}
-              <span className="text-black/70">
-                Vegan: {place.veganOptions || 'unknown'}, Vegetarian:{' '}
-                {place.vegetarianOptions || 'unknown'}
-              </span>
+        {(() => {
+          const hasVegan = place.veganOptions && place.veganOptions.toLowerCase() !== 'unknown';
+          const hasVegetarian = place.vegetarianOptions && place.vegetarianOptions.toLowerCase() !== 'unknown';
+          if (!hasVegan && !hasVegetarian) return null;
+          
+          const options: string[] = [];
+          if (hasVegan) options.push(`Vegan: ${place.veganOptions}`);
+          if (hasVegetarian) options.push(`Vegetarian: ${place.vegetarianOptions}`);
+          
+          return (
+            <div className="flex items-start gap-2">
+              <span>🌱</span>
+              <div className="font-mono">
+                <span className="font-bold text-black">Dietary Options:</span>{' '}
+                <span className="text-black/70">{options.join(', ')}</span>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
-        {place.openingHours && (
+        {place.openingHours && place.openingHours.toLowerCase() !== 'unknown' && (
           <div className="flex items-start gap-2">
             <span>🕐</span>
             <div className="font-mono">
@@ -349,7 +356,7 @@ export default function Recommendation({
                                       <span className="text-amber-500">{stars}</span>
                                     </div>
                                   )}
-                                  {place.priceRange && (
+                                  {place.priceRange && place.priceRange.toLowerCase() !== 'unknown' && (
                                     <div className="flex items-center gap-1">
                                       <span className="text-[10px]">💰</span>
                                       <span>{place.priceRange}</span>
