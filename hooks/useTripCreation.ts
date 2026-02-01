@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { UserEntrySchema } from '@/types/user';
-import type { CreateTripRequest, CreateTripResponse } from '@/types/trip';
+import type { CreateTripRequest, CreateTripResponse, TransportMode } from '@/types/trip';
 
 interface UserEntry {
   id: string;
@@ -17,7 +17,11 @@ export function useTripCreation() {
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const createTrip = async (users: UserEntry[], selectedThemeId: string | null) => {
+  const createTrip = async (
+    users: UserEntry[], 
+    selectedThemeId: string | null,
+    transportMode: TransportMode = 'geographic'
+  ) => {
     const validUsers = users.filter((user) =>
       UserEntrySchema.safeParse(user).success
     );
@@ -55,6 +59,7 @@ export function useTripCreation() {
         preConfiguredUserIds,
         manualUsers,
         themeId: selectedThemeId,
+        transportMode,
       };
 
       const response = await fetch('/api/trips', {
@@ -70,7 +75,7 @@ export function useTripCreation() {
       }
 
       const data: CreateTripResponse = await response.json();
-      router.push(`/trip/${data.tripId}`);
+      router.push(`/trip/${data.tripId}?transportMode=${encodeURIComponent(transportMode)}`);
     } catch (error) {
       console.error('Error creating trip:', error);
       const errorMsg = 'Failed to create trip. Please try again.';

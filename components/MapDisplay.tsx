@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useMemo, memo, createRef } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Tooltip, Circle, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Tooltip, Circle, Polyline, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import type { PlaceType } from '@/lib/theme-place-types';
 
@@ -28,6 +28,13 @@ export interface Restaurant {
   vegetarianOptions?: 'yes' | 'no' | 'unknown';
 }
 
+/** Optional midpoints by mode for drawing lines (center, car, train) in different colors */
+export interface MidpointsByMode {
+  geographic?: { lat: number; lon: number };
+  car?: { lat: number; lon: number };
+  train?: { lat: number; lon: number };
+}
+
 interface MapDisplayProps {
   startpoints: MapPoint[];
   midpoint: { lat: number; lon: number } | null;
@@ -37,6 +44,16 @@ interface MapDisplayProps {
   restaurants?: Restaurant[];
   /** IDs of recommended places to highlight on the map */
   recommendedPlaceIds?: Set<string>;
+  /** Optional: draw lines from each startpoint to center/car/train midpoints in different colors */
+  midpointsByMode?: MidpointsByMode;
+  /** Which lines to show when midpointsByMode is set (default all true). */
+  showGeographicLine?: boolean;
+  showCarLine?: boolean;
+  showTrainLine?: boolean;
+  /** Actual driving route polylines (start → car midpoint) for each startpoint. [lat, lon][] per route. */
+  carRoutePolylines?: Array<Array<[number, number]>>;
+  /** When true, car routes are still being fetched; don't draw car lines until done. */
+  carRoutesLoading?: boolean;
 }
 
 const PLACE_TYPE_LABELS: Partial<Record<PlaceType, string>> = {
@@ -81,6 +98,12 @@ const PLACE_COLORS: Partial<Record<PlaceType, { bg: string; border: string }>> =
   historic: { bg: '#4361ee', border: '#1e3a8a' },         // Cobalt blue
   elevation: { bg: '#E0B0FF', border: '#9333ea' },        // Lavender
   'dog map': { bg: '#ff69b4', border: '#ff1493' },        // Hot pink
+};
+
+const LINE_COLORS = {
+  geographic: '#3b82f6',  // Blue for geographic center
+  car: '#10b981',         // Green for car routes
+  train: '#f59e0b',       // Amber for train routes
 };
 
 const placeIcons: Map<string, L.DivIcon> = new Map();
@@ -242,7 +265,19 @@ function FitBoundsToRadius({
 
 const DEFAULT_RADIUS_KM = 50;
 
-function MapDisplay({ startpoints, midpoint, radiusKm = DEFAULT_RADIUS_KM, restaurants = [], recommendedPlaceIds = new Set() }: MapDisplayProps) {
+function MapDisplay({ 
+  startpoints, 
+  midpoint, 
+  radiusKm = DEFAULT_RADIUS_KM, 
+  restaurants = [], 
+  recommendedPlaceIds = new Set(),
+  midpointsByMode,
+  showGeographicLine = true,
+  showCarLine = true,
+  showTrainLine = true,
+  carRoutePolylines,
+  carRoutesLoading = false
+}: MapDisplayProps) {
   const [isMounted, setIsMounted] = useState(false);
   const mapRef = useRef<L.Map | null>(null);
   const containerKeyRef = useRef(Math.random().toString(36).substring(7));
@@ -329,6 +364,48 @@ function MapDisplay({ startpoints, midpoint, radiusKm = DEFAULT_RADIUS_KM, resta
             </Popup>
           </Marker>
         ))}
+
+        {/* Lines from startpoints to midpoints (geographic, car, train) */}
+        {midpointsByMode && startpoints.length >= 2 && (
+          <>
+            {/* Geographic center lines (straight lines) */}
+            {showGeographicLine && midpointsByMode.geographic && startpoints.map((point, i) => (
+              <Polyline
+                key={`line-geographic-${i}`}
+                positions={[[point.lat, point.lon], [midpointsByMode.geographic!.lat, midpointsByMode.geographic!.lon]]}
+                pathOptions={{ color: LINE_COLORS.geographic, weight: 3, opacity: 0.7, dashArray: '5, 5' }}
+              />
+            ))}
+            
+            {/* Car routing lines (actual driving routes or straight lines if loading) */}
+            {showCarLine && midpointsByMode.car && !carRoutesLoading && (
+              carRoutePolylines && carRoutePolylines.length > 0
+                ? carRoutePolylines.map((positions, i) => (
+                    <Polyline
+                      key={`route-car-${i}`}
+                      positions={positions}
+                      pathOptions={{ color: LINE_COLORS.car, weight: 4, opacity: 0.9 }}
+                    />
+                  ))
+                : startpoints.map((point, i) => (
+                    <Polyline
+                      key={`line-car-${i}`}
+                      positions={[[point.lat, point.lon], [midpointsByMode.car!.lat, midpointsByMode.car!.lon]]}
+                      pathOptions={{ color: LINE_COLORS.car, weight: 3, opacity: 0.7 }}
+                    />
+                  ))
+            )}
+            
+            {/* Train lines (dashed) */}
+            {showTrainLine && midpointsByMode.train && startpoints.map((point, i) => (
+              <Polyline
+                key={`line-train-${i}`}
+                positions={[[point.lat, point.lon], [midpointsByMode.train!.lat, midpointsByMode.train!.lon]]}
+                pathOptions={{ color: LINE_COLORS.train, weight: 4, opacity: 0.9, dashArray: '8, 8' }}
+              />
+            ))}
+          </>
+        )}
 
         {/* Search radius circle around midpoint (50 km default, adjustable later) */}
         {midpoint && (

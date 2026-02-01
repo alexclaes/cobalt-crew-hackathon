@@ -13,10 +13,12 @@ import { useMateManagement } from '@/hooks/useMateManagement';
 import { useTripThemes } from '@/hooks/useTripThemes';
 import { useTripCreation } from '@/hooks/useTripCreation';
 import { useVoiceProcessing } from '@/hooks/useVoiceProcessing';
+import type { TransportMode } from '@/types/trip';
 
 export default function Home() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isManualMateModalOpen, setIsManualMateModalOpen] = useState(false);
+  const [transportMode, setTransportMode] = useState<TransportMode>('geographic');
 
   // Custom hooks for business logic
   const {
@@ -60,7 +62,7 @@ export default function Home() {
   };
 
   const handleCreateTrip = () => {
-    createTrip(users, selectedThemeId);
+    createTrip(users, selectedThemeId, transportMode);
   };
 
   const getValidationMessage = () => {
@@ -96,6 +98,46 @@ export default function Home() {
             onSelectFromList={() => setIsModalOpen(true)}
             onAddManualMate={() => setIsManualMateModalOpen(true)}
           />
+          
+          {/* Transport Mode Selection */}
+          <div className="mt-8 bg-white rounded-2xl border-[3px] border-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] p-6">
+            <h2 className="text-xl font-bold text-black font-sans mb-4">Meeting Point Calculation</h2>
+            <p className="text-sm text-gray-600 mb-4">Choose how to calculate the ideal meeting point for your group</p>
+            <div className="flex gap-4 flex-wrap">
+              <label className="inline-flex items-center gap-2 cursor-pointer px-4 py-2 rounded-lg border-2 border-gray-300 hover:border-blue-500 transition-colors bg-white">
+                <input
+                  type="radio"
+                  name="transport"
+                  checked={transportMode === 'geographic'}
+                  onChange={() => setTransportMode('geographic')}
+                  className="text-blue-600 focus:ring-blue-500"
+                />
+                <span className="font-mono">📍 Geographic Center</span>
+              </label>
+              <label className="inline-flex items-center gap-2 cursor-pointer px-4 py-2 rounded-lg border-2 border-gray-300 hover:border-blue-500 transition-colors bg-white">
+                <input
+                  type="radio"
+                  name="transport"
+                  checked={transportMode === 'car'}
+                  onChange={() => setTransportMode('car')}
+                  className="text-blue-600 focus:ring-blue-500"
+                />
+                <span className="font-mono">🚗 By Car (travel time)</span>
+              </label>
+              <label className="inline-flex items-center gap-2 cursor-not-allowed px-4 py-2 rounded-lg border-2 border-gray-200 opacity-50 bg-gray-50">
+                <input
+                  type="radio"
+                  name="transport"
+                  checked={transportMode === 'train'}
+                  disabled
+                  readOnly
+                  className="text-gray-400 focus:ring-0 cursor-not-allowed"
+                />
+                <span className="font-mono text-gray-500">🚆 By Train (coming soon)</span>
+              </label>
+            </div>
+          </div>
+
           <TripThemeSection
             themes={themes}
             selectedThemeId={selectedThemeId}
